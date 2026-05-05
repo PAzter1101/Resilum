@@ -1,0 +1,5 @@
+{
+  "extraPaths": ["bridges"],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning"
+}
