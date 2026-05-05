@@ -1,0 +1,59 @@
+# Resilum container — single Compose file with two mutually-exclusive
+# profiles: `headless` (no LoRa hardware) and `lora` (with a LoRa radio
+# attached over USB). See README → Quick start.
+#
+#   docker compose --profile headless up    # no radio attached
+#   docker compose --profile lora up        # Heltec / RNode on /dev/ttyACM0
+#
+# Override the radio's device path with LORA_DEVICE if your radio is on a
+# different node (e.g. CP2102-based RNodes show up as /dev/ttyUSB*):
+#
+#   LORA_DEVICE=/dev/ttyUSB0 docker compose --profile lora up
+
+x-resilum-base: &resilum-base
+  # Pre-built multi-arch image published to GitHub Container Registry.
+  # Pulled automatically on first run; no local build required.
+  # The `build:` block below is a fallback for developers and for
+  # architectures we have not yet published (run `docker compose build`
+  # explicitly to use it).
+  image: ghcr.io/pazter1101/resilum:full
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    args:
+      PROFILE: full
+  pull_policy: missing
+  network_mode: host
+  cap_add:
+    - NET_ADMIN
+    - SYS_ADMIN
+  volumes:
+    - ./config:/config
+  restart: unless-stopped
+  environment:
+    # Toggle bundled daemons here. Each only takes effect if the chosen
+    # image profile actually contains the corresponding binary; with the
+    # default `full` image, all of these are available.
+    ENABLE_YGGDRASIL: "0"
+    ENABLE_I2PD: "0"
+    ENABLE_TOR: "0"
+    ENABLE_IODINE: "0"
+
+services:
+  # Run mode without LoRa hardware. Suitable for VPS, SBC bridges or just
+  # poking at Reticulum from a laptop without a radio. The TUN device is
+  # always exposed for future per-app packet routing.
+  resilum:
+    <<: *resilum-base
+    profiles: [headless]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+  # Run mode with a LoRa radio (Heltec V4 / RNode) attached over USB.
+  # Will fail to start if the device path does not exist on the host.
+  resilum-lora:
+    <<: *resilum-base
+    profiles: [lora]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+      - "${LORA_DEVICE:-/dev/ttyACM0}:/dev/ttyACM0"

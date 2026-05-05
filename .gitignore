@@ -30,6 +30,13 @@ config/local/
 .reticulum/
 storage/
 
+# User-specific runtime config (everything inside config/ except markers
+# and example files; compose creates this on first run).
+config/*
+!config/.gitkeep
+!config/*.example
+!config/README.md
+
 # Logs
 *.log
 logs/

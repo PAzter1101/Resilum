@@ -74,23 +74,88 @@ Orange Pi, or an x86 laptop.
 `debian:bookworm-slim` base, multi-stage build, no Rust toolchain, runtime
 only in the final layer.
 
+## Where to run it
+
+Resilum is the same image everywhere — pick the profile that matches the
+role the device should play in the mesh.
+
+| Device | Role in the mesh | Compose profile | What goes in `config/` |
+|---|---|---|---|
+| **VPS with public IP** | Anchor / public peer / optional Tor exit / Yggdrasil-NAT to clearnet | `headless` | `TCPServerInterface` listening for incoming RNS peers; optional Tor / Yggdrasil exits |
+| **SBC at home** (Pi, Orange Pi, …) with a Heltec / RNode plugged in | Bridge between LoRa airwaves, the home LAN and the rest of the mesh | `lora` | `RNodeInterface` (LoRa) + `AutoInterface` (LAN) + `TCPClientInterface` to one or more anchor VPSes |
+| **Laptop / occasional client** | Plain user of the network | `lora` if a radio is plugged in, otherwise `headless` | Minimum: `TCPClientInterface` to an anchor; everything else is optional |
+
+In short: **VPS = anchor, SBC = bridge, laptop = client.** The container
+image is identical for all three; the difference is which interfaces are
+enabled in the config and whether a radio is attached.
+
 ## Quick start
 
-> Not yet runnable — containerisation is the first task. Check back soon.
+We publish multi-arch images (`amd64`, `arm64`, `armv7`) to GitHub
+Container Registry. Docker pulls the right binary for your CPU
+automatically on `docker compose up` — there is **no need to know your
+own architecture or to build anything locally**. (If you are curious:
+`uname -m` returns `x86_64` for AMD/Intel, `aarch64` for 64-bit ARM, and
+`armv7l` for 32-bit ARM such as the Pi Zero W.)
+
+The supplied `docker-compose.yml` exposes two run modes via Compose
+profiles — pick the one that matches your hardware. The first command
+pulls the image; subsequent runs use the cached copy.
+
+### Without LoRa hardware
+
+VPS, SBC, or laptop with no radio plugged in. Reticulum talks to the rest
+of the mesh over whatever transports are enabled in the config (clearnet
+TCP, Yggdrasil, Tor, email, ...).
 
 ```bash
-docker run --rm -it \
-  --network host \
-  --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
-  --device=/dev/net/tun \
-  --device=/dev/ttyACM0 \
-  -v "$(pwd)/config:/config" \
-  ghcr.io/pazter1101/resilum:base
+docker compose --profile headless up
 ```
 
-`--network host` is required so the in-container TUN appears on the host
-side as a regular interface and policy routing on the host can target it
-directly — no WireGuard or other VPN software on the host.
+### With a LoRa radio (Heltec V4 / RNode)
+
+Plug in the radio first — Docker refuses to start the container if the
+USB device is missing.
+
+```bash
+docker compose --profile lora up
+```
+
+If the radio is **not** on `/dev/ttyACM0` (e.g. CP2102-based RNodes
+typically appear as `/dev/ttyUSB0`), point Compose at the right path:
+
+```bash
+LORA_DEVICE=/dev/ttyUSB0 docker compose --profile lora up
+```
+
+### Why the `--profile` flag at all
+
+A Compose profile is the standard way to make a service start
+conditionally without juggling override files. Both run modes share the
+same container image and config — only the device-passthrough list
+differs.
+
+### Networking
+
+`network_mode: host` is required so the in-container TUN appears on the
+host side as a regular interface and host-level policy routing can target
+it directly — no WireGuard or other VPN software is needed on the host.
+
+## Building from source
+
+For development or when iterating on the Dockerfile / a transport.
+Compose will use the local image instead of pulling from the registry.
+
+```bash
+docker compose build
+docker compose --profile headless up
+```
+
+To build a different profile, override the build-arg:
+
+```bash
+docker compose build --build-arg PROFILE=lora
+```
 
 ## Roadmap
 
