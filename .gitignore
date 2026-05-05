@@ -34,8 +34,9 @@ storage/
 # and example files; compose creates this on first run).
 config/*
 !config/.gitkeep
-!config/*.example
 !config/README.md
+!config/defaults/
+!config/defaults/**
 
 # Logs
 *.log

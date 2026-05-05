@@ -18,7 +18,11 @@ ARG PROFILE=lora
 # ─── base ───────────────────────────────────────────────────────────────────
 # Common runtime: Debian slim with Python and the bare-minimum networking
 # tools required regardless of which transports are bundled.
-FROM debian:bookworm-slim AS base
+#
+# Debian 13 ("trixie", stable since 2025-08-09) ships Yggdrasil 0.5.x and
+# Python 3.12 in main, so we get wire-compatible Yggdrasil out of the box
+# without backports or third-party CDNs.
+FROM debian:trixie-slim AS base
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -28,16 +32,24 @@ RUN apt-get update && \
         iproute2 \
         iptables \
         nftables \
+        libcap2-bin \
         python3 \
         python3-pip \
         tini \
     && rm -rf /var/lib/apt/lists/*
 
+# Run all daemons as a regular user so files written into the
+# operator's /config bind-mount stay owned by them, not by root. The
+# UID/GID can be overridden at runtime via `user:` in docker-compose
+# to match the host user exactly.
+RUN groupadd -g 1000 resilum && \
+    useradd  -u 1000 -g 1000 -m -s /bin/sh resilum
+
 # Reticulum stack — present in every profile.
 # `--break-system-packages` is required on Debian 12+ to install into the
 # system Python; we deliberately avoid a venv to keep image size minimal
 # and the entrypoint trivial.
-RUN pip install --no-cache-dir --break-system-packages rns
+RUN pip install --no-cache-dir --break-system-packages --ignore-installed rns pyyaml
 
 # ─── lora ───────────────────────────────────────────────────────────────────
 # Minimum viable Reticulum node: native interfaces (TCP/UDP/AutoInterface)
@@ -57,11 +69,9 @@ RUN apt-get update && \
 # standard TCPClientInterface / I2PInterface respectively.
 FROM profile-lora AS profile-mesh
 
-# Both yggdrasil and i2pd are shipped in Debian bookworm main, so we just
-# pull them from the stock Debian mirror. The yggdrasil version there is
-# slightly behind upstream (0.4.x vs the latest 0.5.x), but is sufficient
-# for the public mesh and avoids dependency on third-party CDNs which
-# may be unreachable from some networks.
+# Both yggdrasil and i2pd come from Debian trixie main; the 0.5.x
+# yggdrasil is wire-compatible with the global mesh, no backports or
+# third-party CDN involved.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         yggdrasil \
@@ -86,7 +96,7 @@ RUN apt-get update && \
 # scapy) is deliberately deferred to the final stage — applying setcap
 # here puts Python into secure-execution mode and breaks subsequent
 # `pip install` invocations in higher-superset profiles (e.g. `full`).
-RUN pip install --no-cache-dir --break-system-packages \
+RUN pip install --no-cache-dir --break-system-packages --ignore-installed \
         scapy \
         rns-covert-transport
 
@@ -95,7 +105,7 @@ RUN pip install --no-cache-dir --break-system-packages \
 # (the meshtastic Python lib has heavy transitive deps).
 FROM profile-covert AS profile-full
 
-RUN pip install --no-cache-dir --break-system-packages meshtastic
+RUN pip install --no-cache-dir --break-system-packages --ignore-installed meshtastic
 
 # ─── final ──────────────────────────────────────────────────────────────────
 # Selects which of the four supersets is the final image based on the
@@ -110,21 +120,47 @@ ENV RNS_CONFIG_DIR=/config/reticulum
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Ship the bridge package and its supervisor inside the image. The
+# supervisor reads /config/bridges.yaml at startup and spawns one
+# `rns_tcp_bridge` child per entry.
+COPY bridges /opt/resilum/bridges
+ENV PYTHONPATH=/opt/resilum/bridges
+
+# Default config snippets shipped inside the image. The entrypoint
+# copies any of these into the operator-mounted /config/ directory on
+# first run when the corresponding user file is missing, so the user
+# always sees a populated, editable directory in their bind mount.
+COPY config/defaults /opt/resilum/defaults
+COPY scripts /opt/resilum/scripts
+
 # Make Reticulum CLI tools (`rnstatus`, `rnpath`, `rnprobe`, ...) discover
 # the daemon's shared instance without having to pass `--config` every
 # time, by symlinking the canonical home-directory location to the
-# operator-mounted config directory.
-RUN mkdir -p /root && ln -snf /config/reticulum /root/.reticulum
+# operator-mounted config directory. The link points from the running
+# user's $HOME (resilum), not /root, since rnsd no longer runs as root.
+RUN ln -snf /config/reticulum /home/resilum/.reticulum
 
-# Grant raw-socket capability to the Python interpreter so scapy-based
-# transports (rns-over-icmp) can craft ICMP packets without privileged
-# container mode. setcap puts Python into secure-execution mode, so it
-# is intentionally the very last step — no `pip install` may follow.
-# `setcap` is not present in the `lora` profile; ignore the absence
-# silently when the target profile bundles neither scapy nor libcap2-bin.
-RUN if command -v setcap >/dev/null 2>&1; then \
-        setcap cap_net_raw,cap_net_admin+eip "$(readlink -f "$(command -v python3)")"; \
+# Grant the capabilities each privileged-needing binary actually
+# requires, so the container can run as an unprivileged user. The
+# `+ep` mode keeps the capability "effective+permitted" but not
+# inheritable — fine for daemons that don't fork to other binaries.
+#
+#   yggdrasil — needs CAP_NET_ADMIN to create the ygg0 TUN interface
+#   iodine    — needs CAP_NET_ADMIN to create its DNS-tunnel TUN
+#   python3   — needs CAP_NET_RAW for scapy-based ICMP transport
+RUN if command -v yggdrasil >/dev/null 2>&1; then \
+        setcap cap_net_admin+ep "$(command -v yggdrasil)"; \
     fi
+RUN if command -v iodine >/dev/null 2>&1; then \
+        setcap cap_net_admin+ep "$(command -v iodine)"; \
+    fi
+RUN setcap cap_net_raw,cap_net_admin+eip "$(readlink -f "$(command -v python3)")" || true
+
+# State directories the unprivileged user must be able to write to.
+RUN mkdir -p /config /var/run/yggdrasil && \
+    chown -R resilum:resilum /config /var/run/yggdrasil /opt/resilum
+
+USER resilum
 
 # tini reaps zombies for the multi-process runtime (rnsd + optional
 # tor / yggdrasil / i2pd / bridges all under one container).

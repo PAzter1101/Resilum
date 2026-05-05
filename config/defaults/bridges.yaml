@@ -1,0 +1,29 @@
+# Default Resilum bridge configuration.
+#
+# Each entry becomes one long-running `rns_tcp_bridge` child process
+# managed by the supervisor. The defaults below make the node a
+# self-sufficient peer in the mesh — it advertises its services to
+# others, and the operator can later add `connect` entries to dial
+# into specific services on remote nodes.
+
+bridges:
+  # Expose the local Yggdrasil daemon to the Reticulum mesh.
+  # Anyone who learns this destination's hash (printed on stdout the
+  # first time the bridge starts) can peer with us through Reticulum
+  # and reach the global Yggdrasil mesh through us. Disable by
+  # commenting out if this node should not be a Yggdrasil entry point.
+  - mode: listen
+    service: yggdrasil
+    identity: /config/bridges/yggdrasil.id
+    tcp: 127.0.0.1:9000
+
+  # ── To dial a remote service through Reticulum, add a `connect`
+  # ── entry like the example below and replace the `target` with the
+  # ── destination hash printed by the remote node's listen-side
+  # ── bridge:
+  #
+  # - mode: connect
+  #   service: yggdrasil
+  #   identity: /config/bridges/yggdrasil-out.id
+  #   tcp: 127.0.0.1:9001
+  #   target: <paste-remote-hash-here>

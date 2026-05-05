@@ -24,6 +24,12 @@ x-resilum-base: &resilum-base
       PROFILE: full
   pull_policy: missing
   network_mode: host
+  # Run as the host user so files in the bind-mounted ./config end up
+  # owned by them, not by root. UID/GID default to 1000 (the typical
+  # first user on Debian/Ubuntu/Arch); override on hosts where they
+  # differ:
+  #     UID=$(id -u) GID=$(id -g) docker compose --profile headless up
+  user: "${UID:-1000}:${GID:-1000}"
   cap_add:
     - NET_ADMIN
     - SYS_ADMIN
@@ -34,7 +40,11 @@ x-resilum-base: &resilum-base
     # Toggle bundled daemons here. Each only takes effect if the chosen
     # image profile actually contains the corresponding binary; with the
     # default `full` image, all of these are available.
-    ENABLE_YGGDRASIL: "0"
+    # Yggdrasil is on by default because it is the IPv6 mesh that
+    # makes the bridge actually useful out-of-the-box. The other
+    # transports require operator-specific configuration (Tor relays,
+    # I2P routers, DNS-tunnel domains) and are opt-in.
+    ENABLE_YGGDRASIL: "1"
     ENABLE_I2PD: "0"
     ENABLE_TOR: "0"
     ENABLE_IODINE: "0"
