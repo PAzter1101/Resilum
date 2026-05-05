@@ -69,6 +69,13 @@ def run(args):
     )
     destination.set_link_established_callback(_on_link_established(tcp_endpoint))
 
+    # Discovery is symmetric: a listen-mode bridge automatically
+    # announces this node's transport endpoint and consumes others'
+    # announcements, if a plugin for the service exists. Missing
+    # plugin → bridge runs as a plain tunnel, no announce/discover.
+    from . import discovery
+    discovery.start(args.service, identity)
+
     while True:
         destination.announce()
         RNS.log(
