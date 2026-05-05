@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.eggs/
+build/
+dist/
+
+# Docker
+.docker-cache/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local config / secrets
+config/local/
+*.local.toml
+*.local.yaml
+.env
+.env.*
+
+# Reticulum runtime state
+.reticulum/
+storage/
+
+# Logs
+*.log
+logs/
