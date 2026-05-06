@@ -67,9 +67,9 @@ web UI — the profile only controls what is *physically in the image*.
 | `resilum:full` | `covert` + Meshtastic gateway + any experimental transports | All-in-one, nothing missing |
 
 Each profile is a superset of the previous one, so layers cache cleanly and
-upgrade paths are linear. Multi-arch builds (`amd64`, `arm64`, `armv7`) via
-`docker buildx`, so the same tag pulls the right binary on a Pi Zero, an
-Orange Pi, or an x86 laptop.
+upgrade paths are linear. Multi-arch builds (`amd64`, `arm64`) via
+`docker buildx`, so the same tag pulls the right binary on an Orange Pi,
+a Raspberry Pi 4/5, or an x86 laptop.
 
 `debian:bookworm-slim` base, multi-stage build, no Rust toolchain, runtime
 only in the final layer.
@@ -91,12 +91,14 @@ enabled in the config and whether a radio is attached.
 
 ## Quick start
 
-We publish multi-arch images (`amd64`, `arm64`, `armv7`) to GitHub
+We publish multi-arch images (`amd64`, `arm64`) to GitHub
 Container Registry. Docker pulls the right binary for your CPU
 automatically on `docker compose up` — there is **no need to know your
 own architecture or to build anything locally**. (If you are curious:
-`uname -m` returns `x86_64` for AMD/Intel, `aarch64` for 64-bit ARM, and
-`armv7l` for 32-bit ARM such as the Pi Zero W.)
+`uname -m` returns `x86_64` for AMD/Intel and `aarch64` for 64-bit ARM,
+which covers virtually every modern SBC — Raspberry Pi 4/5, Orange Pi,
+Rock Pi, etc. 32-bit ARM hosts like the original Pi Zero W are not
+published; build locally if you really need that target.)
 
 The supplied `docker-compose.yml` exposes two run modes via Compose
 profiles — pick the one that matches your hardware. The first command
@@ -169,7 +171,7 @@ docker compose build --build-arg PROFILE=lora
 4. **Open exits**: discovery protocol so any node with clearnet can opt in
    as a public exit, and clients can find the closest one automatically.
 5. **All four profiles** published to GHCR with multi-arch images
-   (amd64 + arm64 + armv7 for Pi Zero).
+   (amd64 + arm64).
 
 ## Related projects
 
