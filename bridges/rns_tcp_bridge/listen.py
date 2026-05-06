@@ -3,10 +3,10 @@ TCP endpoint on the local machine."""
 
 import socket
 import threading
-import time
 
 import RNS
 
+from . import announce_trigger
 from .constants import (
     ANNOUNCE_INTERVAL_SECONDS,
     DEFAULT_ASPECTS,
@@ -77,13 +77,15 @@ def run(args):
 
     discovery.start(args.service, identity)
 
+    trigger = announce_trigger.register()
     while True:
         destination.announce()
         RNS.log(
             f"[bridge:listen] announced as {'.'.join(aspects)}",
             RNS.LOG_DEBUG,
         )
-        time.sleep(ANNOUNCE_INTERVAL_SECONDS)
+        if trigger.wait(ANNOUNCE_INTERVAL_SECONDS):
+            trigger.clear()
 
 
 def _parse_endpoint(spec):
