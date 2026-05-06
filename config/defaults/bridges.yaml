@@ -17,6 +17,22 @@ bridges:
     identity: /config/bridges/yggdrasil.id
     tcp: 127.0.0.1:9000
 
+  # Tor SOCKS gateway. Two things happen here:
+  #
+  #   1. The discovery plugin reads our local Tor hidden-service's
+  #      .onion hostname and broadcasts it as the announce payload, so
+  #      other Resilum nodes can dial us directly through the Tor
+  #      network without knowing our IP.
+  #
+  #   2. The bridge tunnel itself forwards each incoming RNS Link to
+  #      the local Tor SOCKS5 port (9050). Resilum nodes that don't
+  #      have Tor of their own can speak SOCKS5 over the Link to use
+  #      ours — a Tor-exit-as-a-service for the mesh.
+  - mode: listen
+    service: tor
+    identity: /config/bridges/tor.id
+    tcp: 127.0.0.1:9050
+
   # ── To dial a remote service through Reticulum, add a `connect`
   # ── entry like the example below and replace the `target` with the
   # ── destination hash printed by the remote node's listen-side

@@ -46,7 +46,7 @@ x-resilum-base: &resilum-base
     # I2P routers, DNS-tunnel domains) and are opt-in.
     ENABLE_YGGDRASIL: "1"
     ENABLE_I2PD: "0"
-    ENABLE_TOR: "0"
+    ENABLE_TOR: "1"
     ENABLE_IODINE: "0"
 
 services:

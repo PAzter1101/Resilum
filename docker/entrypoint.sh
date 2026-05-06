@@ -30,6 +30,11 @@ seed_default() {
 
 seed_default yggdrasil.conf
 seed_default bridges.yaml
+seed_default torrc
+
+# Tor needs writeable state and hidden-service directories under /config.
+mkdir -p /config/tor/data /config/tor/hidden_service
+chmod 700 /config/tor/hidden_service 2>/dev/null || true
 
 # RNS config lives at $CONFIG_DIR/config (no file extension by convention).
 if [ ! -f "$CONFIG_DIR/config" ] && [ -f /opt/resilum/defaults/reticulum.config ]; then
