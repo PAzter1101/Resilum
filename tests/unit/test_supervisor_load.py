@@ -59,7 +59,9 @@ def test_unknown_mode_aborts(tmp_path):
         load(path)
 
 
-def test_connect_without_target_aborts(tmp_path):
+def test_connect_without_target_is_allowed(tmp_path):
+    """Connect-mode without `target` is valid — bridge will
+    auto-discover one by listening for announces."""
     path = write(
         tmp_path,
         """
@@ -69,8 +71,8 @@ def test_connect_without_target_aborts(tmp_path):
             tcp: 127.0.0.1:1
     """,
     )
-    with pytest.raises(SystemExit, match="no 'target'"):
-        load(path)
+    [spec] = load(path)
+    assert spec.mode == "connect" and spec.target is None
 
 
 def test_default_service_when_omitted(tmp_path):
@@ -85,3 +87,35 @@ def test_default_service_when_omitted(tmp_path):
     )
     [spec] = load(path)
     assert spec.service == "generic"
+
+
+def test_env_var_expansion_with_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("RESILUM_TEST_PORT", raising=False)
+    path = write(
+        tmp_path,
+        """
+        bridges:
+          - mode: listen
+            service: socks-egress
+            identity: /tmp/x.id
+            tcp: 127.0.0.1:${RESILUM_TEST_PORT:-10808}
+    """,
+    )
+    [spec] = load(path)
+    assert spec.tcp == "127.0.0.1:10808"
+
+
+def test_env_var_expansion_overrides_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("RESILUM_TEST_PORT", "10807")
+    path = write(
+        tmp_path,
+        """
+        bridges:
+          - mode: listen
+            service: socks-egress
+            identity: /tmp/x.id
+            tcp: 127.0.0.1:${RESILUM_TEST_PORT:-10808}
+    """,
+    )
+    [spec] = load(path)
+    assert spec.tcp == "127.0.0.1:10807"

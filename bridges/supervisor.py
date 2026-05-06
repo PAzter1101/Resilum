@@ -18,6 +18,7 @@ Run from the container entrypoint:
 
 import argparse
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -28,6 +29,16 @@ import yaml
 
 RESTART_BACKOFF = (1, 2, 5, 15, 30, 60)
 RNS_CONFIG_DIR = os.environ.get("RNS_CONFIG_DIR", "/config/reticulum")
+
+# ${VAR} or ${VAR:-default}. Anything else passes through untouched.
+_ENV_VAR_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}")
+
+
+def _expand_env(text: str) -> str:
+    def sub(match: re.Match) -> str:
+        name, default = match.group(1), match.group(2)
+        return os.environ.get(name, default if default is not None else "")
+    return _ENV_VAR_PATTERN.sub(sub, text)
 
 
 @dataclass
@@ -52,8 +63,6 @@ def _parse_bridges(doc: dict) -> list:
         mode = entry.get("mode")
         if mode not in ("listen", "connect"):
             sys.exit(f"bridges[{i}].mode must be 'listen' or 'connect', got {mode!r}")
-        if mode == "connect" and not entry.get("target"):
-            sys.exit(f"bridges[{i}] is connect-mode but has no 'target'")
         out.append(
             _Bridge(
                 mode=mode,
@@ -81,7 +90,7 @@ def _parse_vpn(doc: dict) -> list:
     return out
 
 
-def _spawn_bridge(spec: _Bridge) -> subprocess.Popen:
+def _spawn_bridge(spec: _Bridge, sibling_listen_identities: list[str]) -> subprocess.Popen:
     cmd = [
         sys.executable,
         "-u",
@@ -99,6 +108,11 @@ def _spawn_bridge(spec: _Bridge) -> subprocess.Popen:
     ]
     if spec.target:
         cmd += ["--target", spec.target]
+    if spec.mode == "connect" and not spec.target:
+        # Pass each sibling listen-bridge identity so connect's
+        # auto-discovery skips this node's own announces.
+        for path in sibling_listen_identities:
+            cmd += ["--skip-self-identity", path]
     print(f"[supervisor] spawning bridge {spec.mode}/{spec.service}", flush=True)
     return subprocess.Popen(cmd)
 
@@ -122,13 +136,25 @@ def _spawn_vpn(spec: _Vpn) -> subprocess.Popen:
 
 def load(path: str) -> list:
     with open(path) as fh:
-        doc = yaml.safe_load(fh) or {}
+        raw = fh.read()
+    doc = yaml.safe_load(_expand_env(raw)) or {}
     return _parse_bridges(doc) + _parse_vpn(doc)
 
 
-def spawn(spec) -> subprocess.Popen:
+def _siblings_for(spec: _Bridge, all_specs: list) -> list[str]:
+    """Identity-file paths of all listen-mode bridges with the same
+    service as ``spec`` — these are the announces that ``spec`` (if it
+    is connect-mode) should treat as its own."""
+    return [
+        s.identity
+        for s in all_specs
+        if isinstance(s, _Bridge) and s.mode == "listen" and s.service == spec.service
+    ]
+
+
+def spawn(spec, all_specs: list) -> subprocess.Popen:
     if isinstance(spec, _Bridge):
-        return _spawn_bridge(spec)
+        return _spawn_bridge(spec, _siblings_for(spec, all_specs))
     if isinstance(spec, _Vpn):
         return _spawn_vpn(spec)
     raise TypeError(f"unknown spec type {type(spec).__name__}")
@@ -143,7 +169,7 @@ def main() -> None:
         print("[supervisor] nothing to run, exiting", flush=True)
         return
 
-    state = [{"spec": s, "proc": spawn(s), "fails": 0, "next": 0.0} for s in specs]
+    state = [{"spec": s, "proc": spawn(s, specs), "fails": 0, "next": 0.0} for s in specs]
 
     stop = False
 
@@ -169,7 +195,7 @@ def main() -> None:
                     flush=True,
                 )
             elif time.time() >= entry["next"]:
-                entry["proc"] = spawn(entry["spec"])
+                entry["proc"] = spawn(entry["spec"], specs)
                 entry["next"] = 0.0
 
     for entry in state:

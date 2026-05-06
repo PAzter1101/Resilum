@@ -56,6 +56,18 @@ def _build_parser():
     p_connect.add_argument(
         "--target", default=None, help="hex hash of the listen-side identity to dial"
     )
+    p_connect.add_argument(
+        "--skip-self-identity",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "path to a listen-bridge identity file whose destination should be "
+            "ignored when auto-discovering targets — used by the supervisor to "
+            "stop a node's connect-bridge from picking its own listen-bridge "
+            "as its target. May be repeated."
+        ),
+    )
     return parser
 
 
