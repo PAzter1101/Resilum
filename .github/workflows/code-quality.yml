@@ -35,13 +35,16 @@ jobs:
     - name: Lint with flake8
       run: |
         flake8 bridges/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 bridges/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+        flake8 bridges/ scripts/ --count --max-complexity=10 --max-line-length=88 --statistics
 
     - name: Type check with mypy
       run: mypy --ignore-missing-imports bridges/ scripts/
 
     - name: Run unit tests
       run: pytest tests/unit -v
+
+    - name: Run smoke tests
+      run: pytest tests/smoke -v
 
   shellcheck:
     runs-on: ubuntu-latest

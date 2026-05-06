@@ -1,0 +1,147 @@
+#!/bin/bash
+set -e
+
+NO_FIX=false
+RUN_DOCKER=false
+DOCKER_PROFILE="full"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-fix)
+            NO_FIX=true
+            shift
+            ;;
+        --docker)
+            RUN_DOCKER=true
+            shift
+            ;;
+        --profile)
+            DOCKER_PROFILE="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--no-fix] [--docker] [--profile lora|mesh|covert|full]"
+            exit 1
+            ;;
+    esac
+done
+
+SOURCE_DIRS=(bridges/ scripts/ tests/)
+LINT_DIRS=(bridges/ scripts/)
+
+echo "🔍 Resilum Quality Check"
+echo "========================"
+
+echo "🐍 Picking Python interpreter..."
+PYTHON=""
+for candidate in python python3 python3.13 python3.12 python3.11; do
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    version=$("$candidate" --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
+    case "$version" in
+        3.11|3.12|3.13)
+            PYTHON="$candidate"
+            echo "✓ Using $candidate (Python $version, matches CI matrix)"
+            break
+            ;;
+    esac
+done
+if [ -z "$PYTHON" ]; then
+    echo "❌ Error: need Python 3.11, 3.12 or 3.13 on PATH (tried: python python3.13 python3.12 python3.11)"
+    exit 1
+fi
+
+echo ""
+echo "📋 Step 1: Linting & Static Analysis"
+echo "-------------------------------------"
+echo "✓ Setting up linting environment..."
+WANT_VERSION=$("$PYTHON" --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
+if [ -d .venv-check ]; then
+    HAVE_VERSION=$(.venv-check/bin/python --version 2>&1 | cut -d' ' -f2 | cut -d'.' -f1,2)
+    if [ "$HAVE_VERSION" != "$WANT_VERSION" ]; then
+        echo "  → existing .venv-check is Python $HAVE_VERSION, recreating with $WANT_VERSION"
+        rm -rf .venv-check
+    fi
+fi
+"$PYTHON" -m venv .venv-check
+# shellcheck source=/dev/null
+source .venv-check/bin/activate
+pip install --upgrade pip > /dev/null 2>&1
+pip install flake8 black isort mypy types-PyYAML rns pyyaml > /dev/null 2>&1
+
+if [ "$NO_FIX" = true ]; then
+    echo "  → black --check --diff ${SOURCE_DIRS[*]}"
+    black --check --diff "${SOURCE_DIRS[@]}"
+    echo "  → isort --check-only --diff ${SOURCE_DIRS[*]}"
+    isort --check-only --diff "${SOURCE_DIRS[@]}"
+else
+    if ! black --check "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
+        echo "  → Fixing code formatting (black)..."
+        black "${SOURCE_DIRS[@]}"
+    fi
+    if ! isort --check-only "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
+        echo "  → Fixing import sorting (isort)..."
+        isort "${SOURCE_DIRS[@]}"
+    fi
+fi
+
+echo "  → flake8 critical errors (E9,F63,F7,F82)..."
+flake8 "${LINT_DIRS[@]}" --count --select=E9,F63,F7,F82 --show-source --statistics
+
+echo "  → flake8 style..."
+flake8 "${LINT_DIRS[@]}" --count --max-complexity=10 --max-line-length=88 --statistics
+
+echo "  → mypy..."
+mypy --ignore-missing-imports "${LINT_DIRS[@]}"
+
+deactivate
+
+echo ""
+echo "🐚 Step 2: Shellcheck"
+echo "---------------------"
+if ! command -v shellcheck &> /dev/null; then
+    echo "❌ shellcheck not installed"
+    echo "   Arch:   sudo pacman -S shellcheck"
+    echo "   Debian: sudo apt install shellcheck"
+    exit 1
+fi
+shellcheck docker/*.sh check.sh
+echo "✓ shellcheck passed"
+
+echo ""
+echo "🧪 Step 3: Unit Tests"
+echo "---------------------"
+# shellcheck source=/dev/null
+source .venv-check/bin/activate
+pip install pytest > /dev/null 2>&1
+pytest tests/unit -v
+deactivate
+
+echo ""
+echo "💨 Step 4: Smoke Tests"
+echo "----------------------"
+# shellcheck source=/dev/null
+source .venv-check/bin/activate
+pytest tests/smoke -v
+deactivate
+
+if [ "$RUN_DOCKER" = true ]; then
+    echo ""
+    echo "🏗️  Step 5: Docker Build (profile=$DOCKER_PROFILE)"
+    echo "----------------------------------------------"
+    if command -v docker &> /dev/null && docker info &> /dev/null; then
+        docker build -f docker/Dockerfile --build-arg PROFILE="$DOCKER_PROFILE" -t "resilum:check-$DOCKER_PROFILE" .
+        echo "✓ Image built: resilum:check-$DOCKER_PROFILE"
+    elif command -v podman &> /dev/null; then
+        podman build -f docker/Dockerfile --build-arg PROFILE="$DOCKER_PROFILE" -t "resilum:check-$DOCKER_PROFILE" .
+        echo "✓ Image built: resilum:check-$DOCKER_PROFILE"
+    else
+        echo "⚠️  No container runtime available, skipping build"
+    fi
+else
+    echo ""
+    echo "⏭️  Skipping docker build (use --docker to run)"
+fi
+
+echo ""
+echo "✅ All checks passed!"

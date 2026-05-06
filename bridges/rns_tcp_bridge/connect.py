@@ -100,7 +100,8 @@ def _hash_from_identity_file(identity_path: str, aspects: list) -> bytes | None:
     sibling = RNS.Destination(
         identity, RNS.Destination.OUT, RNS.Destination.SINGLE, *aspects
     )
-    return sibling.hash
+    h: bytes = sibling.hash
+    return h
 
 
 def _wait_for_announced_target(
