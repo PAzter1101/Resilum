@@ -1,3 +1,26 @@
+## [0.1.1](https://github.com/PAzter1101/Resilum/compare/v0.1.0...v0.1.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **ci:** drop linux/arm/v7 from multi-arch buildx targets ([d1a40ae](https://github.com/PAzter1101/Resilum/commit/d1a40ae00c0178d2b93509c0ed2d591afdaa2387))
+
+## Docker Images
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) published to **GitHub Container Registry** and **Docker Hub**:
+
+| Profile | GHCR | Docker Hub |
+|---|---|---|
+| `full` *(default, `latest` alias)* | `ghcr.io/pazter1101/resilum:full-0.1.1` | `pazter1101/resilum:full-0.1.1` |
+| `covert` (Tor + obfs4 + email/ICMP/DNS) | `ghcr.io/pazter1101/resilum:covert-0.1.1` | `pazter1101/resilum:covert-0.1.1` |
+| `mesh` (Yggdrasil + I2P) | `ghcr.io/pazter1101/resilum:mesh-0.1.1` | `pazter1101/resilum:mesh-0.1.1` |
+| `lora` (Reticulum + LoRa only) | `ghcr.io/pazter1101/resilum:lora-0.1.1` | `pazter1101/resilum:lora-0.1.1` |
+
+### Usage
+```bash
+docker compose --profile headless up
+```
+
 # [0.1.0](https://github.com/PAzter1101/Resilum/compare/v0.0.0...v0.1.0) (2026-05-06)
 
 
