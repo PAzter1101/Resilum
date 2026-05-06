@@ -43,3 +43,41 @@ bridges:
   #   identity: /config/bridges/yggdrasil-out.id
   #   tcp: 127.0.0.1:9001
   #   target: <paste-remote-hash-here>
+
+# ── Layer-3 VPN over Reticulum ────────────────────────────────────────
+# A VPN tunnel routes any IP traffic (TCP, UDP, ICMP, QUIC, …) through
+# the mesh, not just stream protocols. Two roles:
+#
+#   server — anchor with internet uplink. NATs client traffic out to
+#            clearnet via iptables MASQUERADE on `--uplink`.
+#   client — leaf without direct internet. Auto-discovers an anchor
+#            via RNS announces, brings up tun0, points the host's
+#            default route at it.
+#
+# Disabled by default — server mode requires that you know the host
+# uplink interface, and a client-only node should opt in explicitly
+# (it overrides the host default route, which is invasive). Uncomment
+# whichever role applies and Compose-restart.
+#
+# MTU notes:
+#   1280 — default. Standard VPN / minimum IPv6 MTU; works everywhere.
+#                    On clearnet / Yggdrasil underlays, fast.
+#   200–500 — recommended on LoRa-only nodes. Each IP packet then fits
+#                    in 1–4 LoRa frames (≈ 0.2–0.8 s per packet on
+#                    SF10/BW125), so interactive sessions stay usable.
+#                    Bulk transfer suffers slightly more per-byte
+#                    overhead, but throughput is anyway capped by
+#                    LoRa airtime regardless of MTU.
+#
+# vpn:
+#   - mode: server
+#     identity: /config/vpn/server.id
+#     subnet: 10.20.0.0/24
+#     uplink: eth0
+#     mtu: 1280
+#
+#   - mode: client
+#     identity: /config/vpn/client.id
+#     # No `target` here — the client discovers anchors automatically
+#     # by listening for RNS announces on `resilum.vpn.gateway`.
+#     mtu: 1280
