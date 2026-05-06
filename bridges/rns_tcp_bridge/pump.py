@@ -4,11 +4,15 @@ Either side closing tears down the other (and the Link)."""
 
 import socket
 import threading
+import time
 
 import RNS
 from RNS.Buffer import RawChannelReader, RawChannelWriter
 
 from .constants import SOCKET_CHUNK
+
+WRITE_BACKOFF = 0.05
+WRITE_STALL_TIMEOUT = 30
 
 
 def _shutdown(sock, link):
@@ -26,20 +30,36 @@ def _shutdown(sock, link):
         pass
 
 
-def wire_link_to_socket(link, sock, label):
-    channel = link.get_channel()
-    reader = RawChannelReader(0, channel)
-    writer = RawChannelWriter(0, channel)
+def _write_all(writer, data):
+    """RawChannelWriter.write may consume less than the full chunk
+    (capped at MAX_DATA_LEN per call, or 0 when the link is not yet
+    ready). Loop until the whole buffer is delivered, bailing if the
+    link refuses to drain for too long."""
+    view = memoryview(data)
+    deadline = time.time() + WRITE_STALL_TIMEOUT
+    while view:
+        n = writer.write(bytes(view))
+        if not n:
+            if time.time() >= deadline:
+                raise RuntimeError(
+                    f"link did not drain {len(view)} bytes "
+                    f"within {WRITE_STALL_TIMEOUT}s"
+                )
+            time.sleep(WRITE_BACKOFF)
+            continue
+        view = view[n:]
+        deadline = time.time() + WRITE_STALL_TIMEOUT
 
-    closed = threading.Event()
 
-    def teardown():
-        if closed.is_set():
-            return
-        closed.set()
-        _shutdown(sock, link)
+def _half_close_write(sock):
+    try:
+        sock.shutdown(socket.SHUT_WR)
+    except Exception:
+        pass
 
-    def on_rns_data(ready):
+
+def _make_rns_to_tcp(reader, sock, label, teardown):
+    def callback(ready):
         chunk = bytearray(ready)
         n = reader.readinto(chunk)
         if n:
@@ -48,33 +68,45 @@ def wire_link_to_socket(link, sock, label):
             except Exception as exc:
                 RNS.log(f"[{label}/rns→tcp] {exc}", RNS.LOG_DEBUG)
                 teardown()
-        # readinto returns 0 (instead of None) once the writer on the
-        # other side has called close() — propagate the EOF to the
-        # local TCP socket so the application layer notices.
+                return
         if reader._eof:
-            try:
-                sock.shutdown(socket.SHUT_WR)
-            except Exception:
-                pass
+            _half_close_write(sock)
 
-    reader.add_ready_callback(on_rns_data)
+    return callback
 
-    def tcp_to_rns():
+
+def _tcp_to_rns(sock, writer, label):
+    try:
+        while True:
+            chunk = sock.recv(SOCKET_CHUNK)
+            if not chunk:
+                break
+            _write_all(writer, chunk)
+    except Exception as exc:
+        RNS.log(f"[{label}/tcp→rns] {exc}", RNS.LOG_DEBUG)
+    finally:
         try:
-            while True:
-                chunk = sock.recv(SOCKET_CHUNK)
-                if not chunk:
-                    break
-                writer.write(chunk)
-        except Exception as exc:
-            RNS.log(f"[{label}/tcp→rns] {exc}", RNS.LOG_DEBUG)
-        finally:
-            # Closing the writer flushes any pending data and emits an
-            # EOF marker to the peer's reader; do this *before* tearing
-            # the link down so the EOF actually makes it across.
-            try:
-                writer.close()
-            except Exception:
-                pass
+            writer.close()
+        except Exception:
+            pass
 
-    threading.Thread(target=tcp_to_rns, name=f"{label}/tcp→rns", daemon=True).start()
+
+def wire_link_to_socket(link, sock, label):
+    channel = link.get_channel()
+    reader = RawChannelReader(0, channel)
+    writer = RawChannelWriter(0, channel)
+    closed = threading.Event()
+
+    def teardown():
+        if closed.is_set():
+            return
+        closed.set()
+        _shutdown(sock, link)
+
+    reader.add_ready_callback(_make_rns_to_tcp(reader, sock, label, teardown))
+    threading.Thread(
+        target=_tcp_to_rns,
+        args=(sock, writer, label),
+        name=f"{label}/tcp→rns",
+        daemon=True,
+    ).start()

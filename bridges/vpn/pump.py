@@ -28,20 +28,8 @@ def _shutdown(fd: int, link, closed: threading.Event) -> None:
         pass
 
 
-def wire(link, fd: int, label: str) -> threading.Event:
-    """Attach the RNS Link's bidirectional Channel to a TUN file
-    descriptor. Returns the shared `closed` event so callers can wait
-    on the tunnel's lifetime."""
-    channel = link.get_channel()
-    reader = RawChannelReader(0, channel)
-    writer = RawChannelWriter(0, channel)
-    decoder = framing.StreamDecoder()
-    closed = threading.Event()
-
-    def teardown() -> None:
-        _shutdown(fd, link, closed)
-
-    def on_rns_data(_ready: int) -> None:
+def _make_rns_to_tun(reader, fd, label, decoder, teardown):
+    def callback(_ready):
         chunk = bytearray(_ready)
         n = reader.readinto(chunk)
         if not n:
@@ -55,25 +43,44 @@ def wire(link, fd: int, label: str) -> threading.Event:
             RNS.log(f"[{label}/rns→tun] {exc}", RNS.LOG_WARNING)
             teardown()
 
-    reader.add_ready_callback(on_rns_data)
+    return callback
 
-    def tun_to_rns() -> None:
+
+def _tun_to_rns(fd, writer, closed, label):
+    try:
+        while not closed.is_set():
+            packet = os.read(fd, TUN_READ_SIZE)
+            if not packet:
+                break
+            writer.write(framing.encode(packet))
+    except OSError as exc:
+        if not closed.is_set():
+            RNS.log(f"[{label}/tun→rns] {exc}", RNS.LOG_DEBUG)
+    finally:
         try:
-            while not closed.is_set():
-                packet = os.read(fd, TUN_READ_SIZE)
-                if not packet:
-                    break
-                writer.write(framing.encode(packet))
-        except OSError as exc:
-            if not closed.is_set():
-                RNS.log(f"[{label}/tun→rns] {exc}", RNS.LOG_DEBUG)
-        finally:
-            try:
-                writer.close()
-            except Exception:
-                pass
+            writer.close()
+        except Exception:
+            pass
 
+
+def wire(link, fd: int, label: str) -> threading.Event:
+    """Attach the RNS Link's bidirectional Channel to a TUN file
+    descriptor. Returns the shared `closed` event so callers can wait
+    on the tunnel's lifetime."""
+    channel = link.get_channel()
+    reader = RawChannelReader(0, channel)
+    writer = RawChannelWriter(0, channel)
+    decoder = framing.StreamDecoder()
+    closed = threading.Event()
+
+    def teardown() -> None:
+        _shutdown(fd, link, closed)
+
+    reader.add_ready_callback(_make_rns_to_tun(reader, fd, label, decoder, teardown))
     threading.Thread(
-        target=tun_to_rns, name=f"vpn-{label}-tun→rns", daemon=True
+        target=_tun_to_rns,
+        args=(fd, writer, closed, label),
+        name=f"vpn-{label}-tun→rns",
+        daemon=True,
     ).start()
     return closed

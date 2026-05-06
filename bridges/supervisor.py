@@ -38,6 +38,7 @@ def _expand_env(text: str) -> str:
     def sub(match: re.Match) -> str:
         name, default = match.group(1), match.group(2)
         return os.environ.get(name, default if default is not None else "")
+
     return _ENV_VAR_PATTERN.sub(sub, text)
 
 
@@ -90,7 +91,9 @@ def _parse_vpn(doc: dict) -> list:
     return out
 
 
-def _spawn_bridge(spec: _Bridge, sibling_listen_identities: list[str]) -> subprocess.Popen:
+def _spawn_bridge(
+    spec: _Bridge, sibling_listen_identities: list[str]
+) -> subprocess.Popen:
     cmd = [
         sys.executable,
         "-u",
@@ -160,6 +163,23 @@ def spawn(spec, all_specs: list) -> subprocess.Popen:
     raise TypeError(f"unknown spec type {type(spec).__name__}")
 
 
+def _tick(entry, specs):
+    if entry["proc"].poll() is None:
+        return
+    if entry["next"] == 0.0:
+        delay = RESTART_BACKOFF[min(entry["fails"], len(RESTART_BACKOFF) - 1)]
+        entry["fails"] += 1
+        entry["next"] = time.time() + delay
+        print(
+            f"[supervisor] {type(entry['spec']).__name__} exited "
+            f"(rc={entry['proc'].returncode}); restart in {delay}s",
+            flush=True,
+        )
+    elif time.time() >= entry["next"]:
+        entry["proc"] = spawn(entry["spec"], specs)
+        entry["next"] = 0.0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="supervisor")
     parser.add_argument("config", help="path to bridges.yaml")
@@ -169,7 +189,9 @@ def main() -> None:
         print("[supervisor] nothing to run, exiting", flush=True)
         return
 
-    state = [{"spec": s, "proc": spawn(s, specs), "fails": 0, "next": 0.0} for s in specs]
+    state = [
+        {"spec": s, "proc": spawn(s, specs), "fails": 0, "next": 0.0} for s in specs
+    ]
 
     stop = False
 
@@ -183,20 +205,7 @@ def main() -> None:
     while not stop:
         time.sleep(1)
         for entry in state:
-            if entry["proc"].poll() is None:
-                continue
-            if entry["next"] == 0.0:
-                delay = RESTART_BACKOFF[min(entry["fails"], len(RESTART_BACKOFF) - 1)]
-                entry["fails"] += 1
-                entry["next"] = time.time() + delay
-                print(
-                    f"[supervisor] {type(entry['spec']).__name__} exited "
-                    f"(rc={entry['proc'].returncode}); restart in {delay}s",
-                    flush=True,
-                )
-            elif time.time() >= entry["next"]:
-                entry["proc"] = spawn(entry["spec"], specs)
-                entry["next"] = 0.0
+            _tick(entry, specs)
 
     for entry in state:
         if entry["proc"].poll() is None:
