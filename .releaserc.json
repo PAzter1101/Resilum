@@ -6,7 +6,7 @@
       "@semantic-release/release-notes-generator",
       {
         "writerOpts": {
-          "footerPartial": "## Docker Images\n\nMulti-arch images (`linux/amd64`, `linux/arm64`, `linux/arm/v7`) on GitHub Container Registry:\n\n- `ghcr.io/pazter1101/resilum:full-{{version}}` — every transport bundled (default)\n- `ghcr.io/pazter1101/resilum:covert-{{version}}` — Tor + obfs4 + email + ICMP / DNS bridges\n- `ghcr.io/pazter1101/resilum:mesh-{{version}}` — Yggdrasil + I2P\n- `ghcr.io/pazter1101/resilum:lora-{{version}}` — minimum profile (Reticulum + LoRa only)\n\nThe `latest` tag tracks `full-{{version}}`.\n\n### Usage\n```bash\ndocker compose --profile headless up\n```\n\n"
+          "footerPartial": "## Docker Images\n\nMulti-arch images (`linux/amd64`, `linux/arm64`, `linux/arm/v7`) published to **GitHub Container Registry** and **Docker Hub**:\n\n| Profile | GHCR | Docker Hub |\n|---|---|---|\n| `full` *(default, `latest` alias)* | `ghcr.io/pazter1101/resilum:full-{{version}}` | `pazter1101/resilum:full-{{version}}` |\n| `covert` (Tor + obfs4 + email/ICMP/DNS) | `ghcr.io/pazter1101/resilum:covert-{{version}}` | `pazter1101/resilum:covert-{{version}}` |\n| `mesh` (Yggdrasil + I2P) | `ghcr.io/pazter1101/resilum:mesh-{{version}}` | `pazter1101/resilum:mesh-{{version}}` |\n| `lora` (Reticulum + LoRa only) | `ghcr.io/pazter1101/resilum:lora-{{version}}` | `pazter1101/resilum:lora-{{version}}` |\n\n### Usage\n```bash\ndocker compose --profile headless up\n```\n\n"
         }
       }
     ],
