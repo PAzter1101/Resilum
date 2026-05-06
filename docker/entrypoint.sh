@@ -56,7 +56,7 @@ run_if_enabled() {
     flag="$1"
     binary="$2"
     shift 2
-    eval "value=\${$flag:-0}"
+    value=$(printenv "$flag" || echo 0)
     if [ "$value" = "1" ] && command -v "$binary" >/dev/null 2>&1; then
         echo "[entrypoint] starting $binary"
         "$binary" "$@" &
