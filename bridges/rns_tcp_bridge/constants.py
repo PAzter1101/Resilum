@@ -10,8 +10,8 @@ DEFAULT_ASPECTS = ["resilum", "bridge", "tcp"]
 # does not pollute the mesh with extra announces. The two timeouts apply
 # to both directions of the path-request / link-establish handshake.
 ANNOUNCE_INTERVAL_SECONDS = 6 * 60 * 60
-LINK_ESTABLISH_TIMEOUT    = 30
-PATH_REQUEST_TIMEOUT      = 30
+LINK_ESTABLISH_TIMEOUT = 30
+PATH_REQUEST_TIMEOUT = 30
 
 # Buffer chunk used by the byte pump in both directions.
 SOCKET_CHUNK = 4096

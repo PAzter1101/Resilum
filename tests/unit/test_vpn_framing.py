@@ -7,8 +7,8 @@ from vpn import framing
 
 def test_encode_round_trips_through_decoder():
     decoder = framing.StreamDecoder()
-    pkts    = [b"hello", b"\x00world", b"x" * 1500]
-    blob    = b"".join(framing.encode(p) for p in pkts)
+    pkts = [b"hello", b"\x00world", b"x" * 1500]
+    blob = b"".join(framing.encode(p) for p in pkts)
     assert decoder.feed(blob) == pkts
 
 
@@ -40,6 +40,6 @@ def test_decoder_rejects_runs_of_garbage_with_huge_length():
     # the decoder still emits the partial payload correctly when the
     # full packet eventually arrives.
     decoder = framing.StreamDecoder()
-    decoder.feed(b"\xff\xff")           # 65535-byte payload incoming
+    decoder.feed(b"\xff\xff")  # 65535-byte payload incoming
     body = b"\x00" * 65535
     assert decoder.feed(body) == [body]

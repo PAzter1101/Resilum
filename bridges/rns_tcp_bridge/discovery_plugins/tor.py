@@ -18,10 +18,10 @@ from RNS.Interfaces.TCPInterface import TCPClientInterface
 from .base import DiscoveryPlugin
 
 HOSTNAME_PATH = "/config/tor/hidden_service/hostname"
-SOCKS_HOST    = "127.0.0.1"
-SOCKS_PORT    = 9050
-RNS_PORT      = 4242
-ENDPOINT_RE   = re.compile(rb"^([a-z2-7]{16,56}\.onion):(\d+)$")
+SOCKS_HOST = "127.0.0.1"
+SOCKS_PORT = 9050
+RNS_PORT = 4242
+ENDPOINT_RE = re.compile(rb"^([a-z2-7]{16,56}\.onion):(\d+)$")
 
 
 class _Tor(DiscoveryPlugin):
@@ -38,7 +38,9 @@ class _Tor(DiscoveryPlugin):
         host = match.group(1).decode()
         port = int(match.group(2))
         name = f"TorDiscovered[{host}]:{port}"
-        if any(getattr(iface, "name", "") == name for iface in RNS.Transport.interfaces):
+        if any(
+            getattr(iface, "name", "") == name for iface in RNS.Transport.interfaces
+        ):
             return
         iface = TCPClientInterface(
             owner=RNS.Transport,
@@ -51,8 +53,7 @@ class _Tor(DiscoveryPlugin):
             },
         )
         RNS.Transport.interfaces.append(iface)
-        RNS.log(f"[discovery:tor] added interface {name} via Tor SOCKS",
-                RNS.LOG_INFO)
+        RNS.log(f"[discovery:tor] added interface {name} via Tor SOCKS", RNS.LOG_INFO)
 
 
 def plugin() -> DiscoveryPlugin:

@@ -46,11 +46,13 @@ def upsert(records: list[dict], endpoint: bytes, *, now: float | None = None) ->
         if rec.get("endpoint") == hex_endpoint:
             rec["last_seen"] = ts
             return
-    records.append({
-        "endpoint": hex_endpoint,
-        "first_seen": ts,
-        "last_seen": ts,
-    })
+    records.append(
+        {
+            "endpoint": hex_endpoint,
+            "first_seen": ts,
+            "last_seen": ts,
+        }
+    )
 
 
 def prune(records: list[dict], ttl_seconds: int, *, now: float | None = None) -> int:

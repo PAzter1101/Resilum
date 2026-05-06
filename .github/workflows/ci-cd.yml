@@ -1,0 +1,147 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  semantic-release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      released: ${{ steps.release.outputs.released }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+
+    - name: Install semantic-release
+      run: |
+        npm install -g semantic-release @semantic-release/changelog @semantic-release/git
+
+    - name: Release
+      id: release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        npx semantic-release --debug 2>&1 | tee release.log
+        if grep -q "Published release" release.log; then
+          VERSION=$(grep "Published release" release.log | sed -n 's/.*Published release \([^ ]*\).*/\1/p')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "released=true" >> $GITHUB_OUTPUT
+        else
+          echo "released=false" >> $GITHUB_OUTPUT
+        fi
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [semantic-release]
+    if: github.ref == 'refs/heads/main' && needs.semantic-release.outputs.released == 'true'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - profile: lora
+          - profile: mesh
+          - profile: covert
+          - profile: full
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v4
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v4
+      with:
+        registry: docker.io
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ghcr.io/${{ github.repository_owner }}/resilum
+          ${{ secrets.DOCKERHUB_USERNAME }}/resilum
+        tags: |
+          type=raw,value=${{ matrix.profile }}
+          type=raw,value=${{ matrix.profile }}-${{ needs.semantic-release.outputs.version }}
+          type=raw,value=latest,enable=${{ matrix.profile == 'full' }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile
+        platforms: linux/amd64,linux/arm64,linux/arm/v7
+        push: true
+        build-args: |
+          PROFILE=${{ matrix.profile }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha,scope=${{ matrix.profile }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.profile }}
+
+  sync-dev:
+    runs-on: ubuntu-latest
+    needs: [semantic-release]
+    if: github.ref == 'refs/heads/main' && needs.semantic-release.outputs.released == 'true'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.PAT_TOKEN }}
+        ref: main
+
+    - name: Create sync PR
+      env:
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: |
+        BRANCH_NAME="sync-main-to-dev-$(date +%s)"
+        git checkout -b $BRANCH_NAME
+        git push origin $BRANCH_NAME
+        PR_URL=$(gh pr create \
+          --title "chore: sync release changes from main to dev" \
+          --body "Auto-sync after release. Merges latest from main into dev." \
+          --base dev \
+          --head $BRANCH_NAME)
+        echo "PR_URL=$PR_URL" >> $GITHUB_ENV
+
+    - name: Enable auto-merge
+      env:
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+      run: gh pr merge --auto --merge "$PR_URL"

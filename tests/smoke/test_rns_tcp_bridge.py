@@ -21,11 +21,11 @@ import pytest
 
 pytest.importorskip("RNS", reason="Reticulum (rns) is not installed")
 
-ROOT_DIR     = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-BRIDGES_DIR  = os.path.join(ROOT_DIR, "bridges")
-LISTEN_PORT  = 9000
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BRIDGES_DIR = os.path.join(ROOT_DIR, "bridges")
+LISTEN_PORT = 9000
 CONNECT_PORT = 9001
-HASH_RE      = re.compile(r"destination <([0-9a-f]+)>")
+HASH_RE = re.compile(r"destination <([0-9a-f]+)>")
 
 
 def _spawn_bridge(args, log_path):
@@ -78,9 +78,9 @@ def _tcp_sink(host, port, ready_event):
 
 def test_tcp_through_rns_link():
     work = tempfile.mkdtemp(prefix="resilum-smoke.")
-    listen_log  = os.path.join(work, "listen.log")
+    listen_log = os.path.join(work, "listen.log")
     connect_log = os.path.join(work, "connect.log")
-    received    = {}
+    received = {}
 
     def run_sink():
         received["bytes"] = _tcp_sink("127.0.0.1", LISTEN_PORT, sink_ready)
@@ -91,30 +91,52 @@ def test_tcp_through_rns_link():
     assert sink_ready.wait(5), "TCP sink failed to bind"
 
     listen_proc = _spawn_bridge(
-        ["--config", os.path.join(work, "rns"), "--loglevel", "5",
-         "listen",  "--identity", os.path.join(work, "listen.id"),
-         "--service", "smoke", "--tcp", f"127.0.0.1:{LISTEN_PORT}"],
+        [
+            "--config",
+            os.path.join(work, "rns"),
+            "--loglevel",
+            "5",
+            "listen",
+            "--identity",
+            os.path.join(work, "listen.id"),
+            "--service",
+            "smoke",
+            "--tcp",
+            f"127.0.0.1:{LISTEN_PORT}",
+        ],
         listen_log,
     )
     try:
         target_hash = _wait_for_hash(listen_log, timeout=60)
 
         connect_proc = _spawn_bridge(
-            ["--config", os.path.join(work, "rns"), "--loglevel", "5",
-             "connect", "--identity", os.path.join(work, "connect.id"),
-             "--service", "smoke", "--tcp", f"127.0.0.1:{CONNECT_PORT}",
-             "--target", target_hash],
+            [
+                "--config",
+                os.path.join(work, "rns"),
+                "--loglevel",
+                "5",
+                "connect",
+                "--identity",
+                os.path.join(work, "connect.id"),
+                "--service",
+                "smoke",
+                "--tcp",
+                f"127.0.0.1:{CONNECT_PORT}",
+                "--target",
+                target_hash,
+            ],
             connect_log,
         )
         try:
-            time.sleep(5)   # connect side binds + warms up
+            time.sleep(5)  # connect side binds + warms up
             magic = f"resilum-smoke-{time.time_ns()}".encode()
             with socket.create_connection(("127.0.0.1", CONNECT_PORT), timeout=10) as s:
                 s.sendall(magic + b"\n")
                 s.shutdown(socket.SHUT_WR)
             sink_thread.join(timeout=15)
-            assert magic in received.get("bytes", b""), \
-                f"magic string did not reach the sink (got {received.get('bytes')!r})"
+            assert magic in received.get(
+                "bytes", b""
+            ), f"magic string did not reach the sink (got {received.get('bytes')!r})"
         finally:
             connect_proc.terminate()
             connect_proc.wait(timeout=5)

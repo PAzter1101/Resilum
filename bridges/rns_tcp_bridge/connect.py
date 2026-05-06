@@ -8,11 +8,7 @@ import time
 
 import RNS
 
-from .constants import (
-    DEFAULT_ASPECTS,
-    LINK_ESTABLISH_TIMEOUT,
-    PATH_REQUEST_TIMEOUT,
-)
+from .constants import DEFAULT_ASPECTS, LINK_ESTABLISH_TIMEOUT, PATH_REQUEST_TIMEOUT
 from .identity import load_or_create_identity
 from .pump import wire_link_to_socket
 
@@ -34,8 +30,10 @@ def _resolve_target(target_hash, aspects):
         return None
 
     return RNS.Destination(
-        remote_identity, RNS.Destination.OUT,
-        RNS.Destination.SINGLE, *aspects,
+        remote_identity,
+        RNS.Destination.OUT,
+        RNS.Destination.SINGLE,
+        *aspects,
     )
 
 
@@ -56,7 +54,10 @@ def _open_link(target_dest, target_hash):
 
 
 def _handle_outbound(sock, target_hash, aspects):
-    RNS.log(f"[bridge:connect] resolving target {RNS.prettyhexrep(target_hash)}", RNS.LOG_VERBOSE)
+    RNS.log(
+        f"[bridge:connect] resolving target {RNS.prettyhexrep(target_hash)}",
+        RNS.LOG_VERBOSE,
+    )
     target_dest = _resolve_target(target_hash, aspects)
     if target_dest is None:
         RNS.log(
@@ -85,7 +86,7 @@ def run(args):
         )
 
     load_or_create_identity(args.identity)
-    aspects     = DEFAULT_ASPECTS + [args.service]
+    aspects = DEFAULT_ASPECTS + [args.service]
     target_hash = bytes.fromhex(args.target)
     tcp_host, tcp_port = args.tcp.rsplit(":", 1)
     tcp_port = int(tcp_port)

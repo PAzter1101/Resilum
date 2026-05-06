@@ -28,10 +28,11 @@ def _shutdown(sock, link):
 
 def wire_link_to_socket(link, sock, label):
     channel = link.get_channel()
-    reader  = RawChannelReader(0, channel)
-    writer  = RawChannelWriter(0, channel)
+    reader = RawChannelReader(0, channel)
+    writer = RawChannelWriter(0, channel)
 
     closed = threading.Event()
+
     def teardown():
         if closed.is_set():
             return

@@ -33,11 +33,13 @@ def wire(link, fd: int, label: str) -> threading.Event:
     descriptor. Returns the shared `closed` event so callers can wait
     on the tunnel's lifetime."""
     channel = link.get_channel()
-    reader  = RawChannelReader(0, channel)
-    writer  = RawChannelWriter(0, channel)
+    reader = RawChannelReader(0, channel)
+    writer = RawChannelWriter(0, channel)
     decoder = framing.StreamDecoder()
-    closed  = threading.Event()
-    teardown = lambda: _shutdown(fd, link, closed)
+    closed = threading.Event()
+
+    def teardown() -> None:
+        _shutdown(fd, link, closed)
 
     def on_rns_data(_ready: int) -> None:
         chunk = bytearray(_ready)
@@ -71,6 +73,7 @@ def wire(link, fd: int, label: str) -> threading.Event:
             except Exception:
                 pass
 
-    threading.Thread(target=tun_to_rns, name=f"vpn-{label}-tun→rns",
-                     daemon=True).start()
+    threading.Thread(
+        target=tun_to_rns, name=f"vpn-{label}-tun→rns", daemon=True
+    ).start()
     return closed

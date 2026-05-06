@@ -1,0 +1,71 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  python-lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort mypy types-PyYAML pytest rns pyyaml
+
+    - name: Check code formatting with Black
+      run: black --check --diff bridges/ scripts/ tests/
+
+    - name: Check import sorting with isort
+      run: isort --check-only --diff bridges/ scripts/ tests/
+
+    - name: Lint with flake8
+      run: |
+        flake8 bridges/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 bridges/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+
+    - name: Type check with mypy
+      run: mypy --ignore-missing-imports bridges/ scripts/
+
+    - name: Run unit tests
+      run: pytest tests/unit -v
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Run shellcheck
+      uses: ludeeus/action-shellcheck@master
+      with:
+        scandir: ./docker
+
+  docker-build-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Build (no push) — verify Dockerfile is healthy
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile
+        platforms: linux/amd64
+        push: false
+        build-args: PROFILE=full
+        cache-from: type=gha,scope=pr-check
+        cache-to: type=gha,mode=max,scope=pr-check
