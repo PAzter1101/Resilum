@@ -12,8 +12,8 @@ realistically pick.
 import struct
 
 LENGTH_BYTES = 2
-HEADER       = struct.Struct(">H")
-MAX_PACKET   = (1 << 16) - 1
+HEADER = struct.Struct(">H")
+MAX_PACKET = (1 << 16) - 1
 
 
 class FramingError(Exception):

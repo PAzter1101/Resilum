@@ -74,6 +74,7 @@ def run(args):
     # announcements, if a plugin for the service exists. Missing
     # plugin → bridge runs as a plain tunnel, no announce/discover.
     from . import discovery
+
     discovery.start(args.service, identity)
 
     while True:

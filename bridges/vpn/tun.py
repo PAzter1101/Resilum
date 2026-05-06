@@ -14,9 +14,9 @@ import subprocess
 
 # /usr/include/linux/if_tun.h
 TUNSETIFF = 0x400454CA
-IFF_TUN   = 0x0001
+IFF_TUN = 0x0001
 IFF_NO_PI = 0x1000  # don't prepend the 4-byte protocol header
-TUN_DEV   = "/dev/net/tun"
+TUN_DEV = "/dev/net/tun"
 
 
 def open_tun(name: str) -> int:
@@ -46,8 +46,11 @@ def configure(name: str, address: str, prefix_len: int, mtu: int) -> None:
 def teardown(name: str) -> None:
     """Best-effort: take the interface down. Ignore errors so the
     cleanup path doesn't blow up if something already removed it."""
-    subprocess.run(["ip", "link", "set", "dev", name, "down"],
-                   check=False, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["ip", "link", "set", "dev", name, "down"],
+        check=False,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def replace_default_route(tun_name: str, gateway: str) -> str | None:
@@ -57,11 +60,14 @@ def replace_default_route(tun_name: str, gateway: str) -> str | None:
     None if the host had no default route to begin with."""
     out = subprocess.run(
         ["ip", "route", "show", "default"],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     previous = out.stdout.strip().splitlines()[0] if out.stdout.strip() else None
-    subprocess.run(["ip", "route", "del", "default"], check=False,
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["ip", "route", "del", "default"], check=False, stderr=subprocess.DEVNULL
+    )
     subprocess.run(
         ["ip", "route", "add", "default", "via", gateway, "dev", tun_name],
         check=True,
@@ -72,7 +78,11 @@ def replace_default_route(tun_name: str, gateway: str) -> str | None:
 def restore_default_route(previous: str | None) -> None:
     if previous is None:
         return
-    subprocess.run(["ip", "route", "del", "default"], check=False,
-                   stderr=subprocess.DEVNULL)
-    subprocess.run(["ip", "route", "add"] + previous.split(), check=False,
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["ip", "route", "del", "default"], check=False, stderr=subprocess.DEVNULL
+    )
+    subprocess.run(
+        ["ip", "route", "add"] + previous.split(),
+        check=False,
+        stderr=subprocess.DEVNULL,
+    )

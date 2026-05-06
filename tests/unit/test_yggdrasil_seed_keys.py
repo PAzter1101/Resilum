@@ -18,7 +18,7 @@ seed = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(seed)
 
 
-SAMPLE_CONFIG = '''\
+SAMPLE_CONFIG = """\
 # Header comment
 {
   PrivateKey: ""
@@ -27,21 +27,21 @@ SAMPLE_CONFIG = '''\
     "tcp://127.0.0.1:9000"
   ]
 }
-'''
+"""
 
 
 def test_splice_replaces_empty_private_key():
     out = seed.splice(SAMPLE_CONFIG, {"PrivateKey": "deadbeef"})
     assert "PrivateKey: deadbeef" in out
-    assert "Listen:" in out             # rest of file untouched
-    assert "# Header comment" in out    # comments preserved
+    assert "Listen:" in out  # rest of file untouched
+    assert "# Header comment" in out  # comments preserved
 
 
 def test_splice_only_runs_once_per_key():
-    text = '''
+    text = """
     PrivateKey: ""
     PrivateKey: ""
-    '''
+    """
     out = seed.splice(text, {"PrivateKey": "aaaa"})
-    assert out.count('PrivateKey: aaaa') == 1
-    assert out.count('PrivateKey: ""')   == 1
+    assert out.count("PrivateKey: aaaa") == 1
+    assert out.count('PrivateKey: ""') == 1

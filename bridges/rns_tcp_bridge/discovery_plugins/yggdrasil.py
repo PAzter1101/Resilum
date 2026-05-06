@@ -16,8 +16,8 @@ from RNS.Interfaces.TCPInterface import TCPClientInterface
 from .base import DiscoveryPlugin
 
 DEFAULT_RNS_PORT = 4242
-ENDPOINT_RE      = re.compile(rb"^\[([0-9a-fA-F:]+)\]:(\d+)$")
-IPV6_LINE_RE     = re.compile(r"IPv6 address:\s*([0-9a-fA-F:]+)")
+ENDPOINT_RE = re.compile(rb"^\[([0-9a-fA-F:]+)\]:(\d+)$")
+IPV6_LINE_RE = re.compile(r"IPv6 address:\s*([0-9a-fA-F:]+)")
 
 
 class _Yggdrasil(DiscoveryPlugin):
@@ -32,12 +32,16 @@ class _Yggdrasil(DiscoveryPlugin):
     def consume_endpoint(self, payload: bytes) -> None:
         match = ENDPOINT_RE.match(payload.strip())
         if not match:
-            RNS.log(f"[discovery:yggdrasil] malformed payload {payload!r}", RNS.LOG_DEBUG)
+            RNS.log(
+                f"[discovery:yggdrasil] malformed payload {payload!r}", RNS.LOG_DEBUG
+            )
             return
         host = match.group(1).decode()
         port = int(match.group(2))
         name = f"YggdrasilDiscovered[{host}]:{port}"
-        if any(getattr(iface, "name", "") == name for iface in RNS.Transport.interfaces):
+        if any(
+            getattr(iface, "name", "") == name for iface in RNS.Transport.interfaces
+        ):
             return  # already added
         iface = TCPClientInterface(
             owner=RNS.Transport,

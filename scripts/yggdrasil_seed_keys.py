@@ -14,7 +14,7 @@ import re
 import subprocess
 import sys
 
-PRIVATE_KEY_RE = re.compile(r'PrivateKey:\s*([0-9a-f]+)')
+PRIVATE_KEY_RE = re.compile(r"PrivateKey:\s*([0-9a-f]+)")
 
 
 def fresh_keys():
@@ -31,7 +31,8 @@ def splice(text, keys):
     return re.sub(
         r'PrivateKey:\s*""',
         f'PrivateKey: {keys["PrivateKey"]}',
-        text, count=1,
+        text,
+        count=1,
     )
 
 

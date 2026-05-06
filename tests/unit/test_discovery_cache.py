@@ -10,7 +10,7 @@ def test_upsert_inserts_new_endpoint(tmp_path):
     cache.upsert(records, b"endpoint-A", now=100.0)
     assert len(records) == 1
     assert records[0]["first_seen"] == 100.0
-    assert records[0]["last_seen"]  == 100.0
+    assert records[0]["last_seen"] == 100.0
 
 
 def test_upsert_refreshes_existing_endpoint():
@@ -19,12 +19,12 @@ def test_upsert_refreshes_existing_endpoint():
     cache.upsert(records, b"endpoint-A", now=200.0)
     assert len(records) == 1
     assert records[0]["first_seen"] == 100.0
-    assert records[0]["last_seen"]  == 200.0
+    assert records[0]["last_seen"] == 200.0
 
 
 def test_prune_drops_records_older_than_ttl():
     records = []
-    cache.upsert(records, b"old",   now=0.0)
+    cache.upsert(records, b"old", now=0.0)
     cache.upsert(records, b"fresh", now=1000.0)
     removed = cache.prune(records, ttl_seconds=500, now=1000.0)
     assert removed == 1
@@ -33,8 +33,8 @@ def test_prune_drops_records_older_than_ttl():
 
 def test_top_n_returns_most_recently_seen():
     records = []
-    cache.upsert(records, b"one",   now=1.0)
-    cache.upsert(records, b"two",   now=2.0)
+    cache.upsert(records, b"one", now=1.0)
+    cache.upsert(records, b"two", now=2.0)
     cache.upsert(records, b"three", now=3.0)
     assert list(cache.top_n(records, 2)) == [b"three", b"two"]
 

@@ -17,17 +17,17 @@ from .discovery_plugins import load as load_plugin
 
 ASPECT_PREFIX = ["resilum", "discovery"]
 ANNOUNCE_INTERVAL_SECONDS = 6 * 60 * 60
-TTL_SECONDS               = 24 * 60 * 60
-TOP_N_ACTIVE              = 10
-PRUNE_INTERVAL_SECONDS    = 60 * 60
+TTL_SECONDS = 24 * 60 * 60
+TOP_N_ACTIVE = 10
+PRUNE_INTERVAL_SECONDS = 60 * 60
 
 
 class _AnnounceHandler:
     def __init__(self, service: str, plugin: DiscoveryPlugin, cache_path: str):
         self.aspect_filter = ".".join(ASPECT_PREFIX + [service])
         self.receive_path_responses = False
-        self.service    = service
-        self.plugin     = plugin
+        self.service = service
+        self.plugin = plugin
         self.cache_path = cache_path
 
     def received_announce(self, destination_hash, announced_identity, app_data):
@@ -39,8 +39,9 @@ class _AnnounceHandler:
         try:
             self.plugin.consume_endpoint(app_data)
         except Exception as exc:
-            RNS.log(f"[discovery:{self.service}] consume failed: {exc}",
-                    RNS.LOG_WARNING)
+            RNS.log(
+                f"[discovery:{self.service}] consume failed: {exc}", RNS.LOG_WARNING
+            )
 
 
 def _restore_top_n(plugin: DiscoveryPlugin, cache_path: str) -> None:
@@ -61,8 +62,7 @@ def _announce_loop(destination, plugin: DiscoveryPlugin, service: str) -> None:
             destination.announce(app_data=payload)
             RNS.log(f"[discovery:{service}] announced {payload!r}", RNS.LOG_DEBUG)
         except Exception as exc:
-            RNS.log(f"[discovery:{service}] announce skipped: {exc}",
-                    RNS.LOG_DEBUG)
+            RNS.log(f"[discovery:{service}] announce skipped: {exc}", RNS.LOG_DEBUG)
         time.sleep(ANNOUNCE_INTERVAL_SECONDS)
 
 
@@ -83,9 +83,12 @@ def start(service: str, identity: RNS.Identity) -> Optional[DiscoveryPlugin]:
         return None
 
     cache_path = f"/config/discovered/{service}.json"
-    aspects    = ASPECT_PREFIX + [service]
+    aspects = ASPECT_PREFIX + [service]
     destination = RNS.Destination(
-        identity, RNS.Destination.IN, RNS.Destination.SINGLE, *aspects,
+        identity,
+        RNS.Destination.IN,
+        RNS.Destination.SINGLE,
+        *aspects,
     )
 
     handler = _AnnounceHandler(service, plugin, cache_path)
@@ -93,11 +96,22 @@ def start(service: str, identity: RNS.Identity) -> Optional[DiscoveryPlugin]:
 
     _restore_top_n(plugin, cache_path)
 
-    threading.Thread(target=_announce_loop, args=(destination, plugin, service),
-                     name=f"discovery-announce-{service}", daemon=True).start()
-    threading.Thread(target=_prune_loop, args=(cache_path,),
-                     name=f"discovery-prune-{service}", daemon=True).start()
+    threading.Thread(
+        target=_announce_loop,
+        args=(destination, plugin, service),
+        name=f"discovery-announce-{service}",
+        daemon=True,
+    ).start()
+    threading.Thread(
+        target=_prune_loop,
+        args=(cache_path,),
+        name=f"discovery-prune-{service}",
+        daemon=True,
+    ).start()
 
-    RNS.log(f"[discovery:{service}] started "
-            f"(aspect={'.'.join(aspects)}, top_n={TOP_N_ACTIVE})", RNS.LOG_INFO)
+    RNS.log(
+        f"[discovery:{service}] started "
+        f"(aspect={'.'.join(aspects)}, top_n={TOP_N_ACTIVE})",
+        RNS.LOG_INFO,
+    )
     return plugin

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import yaml
 
 RESTART_BACKOFF = (1, 2, 5, 15, 30, 60)
-RNS_CONFIG_DIR  = os.environ.get("RNS_CONFIG_DIR", "/config/reticulum")
+RNS_CONFIG_DIR = os.environ.get("RNS_CONFIG_DIR", "/config/reticulum")
 
 
 @dataclass
@@ -54,11 +54,15 @@ def _parse_bridges(doc: dict) -> list:
             sys.exit(f"bridges[{i}].mode must be 'listen' or 'connect', got {mode!r}")
         if mode == "connect" and not entry.get("target"):
             sys.exit(f"bridges[{i}] is connect-mode but has no 'target'")
-        out.append(_Bridge(
-            mode=mode, service=entry.get("service", "generic"),
-            identity=entry["identity"], tcp=entry["tcp"],
-            target=entry.get("target"),
-        ))
+        out.append(
+            _Bridge(
+                mode=mode,
+                service=entry.get("service", "generic"),
+                identity=entry["identity"],
+                tcp=entry["tcp"],
+                target=entry.get("target"),
+            )
+        )
     return out
 
 
@@ -79,10 +83,19 @@ def _parse_vpn(doc: dict) -> list:
 
 def _spawn_bridge(spec: _Bridge) -> subprocess.Popen:
     cmd = [
-        sys.executable, "-u", "-m", "rns_tcp_bridge",
-        "--config", RNS_CONFIG_DIR,
-        spec.mode, "--identity", spec.identity,
-        "--service", spec.service, "--tcp", spec.tcp,
+        sys.executable,
+        "-u",
+        "-m",
+        "rns_tcp_bridge",
+        "--config",
+        RNS_CONFIG_DIR,
+        spec.mode,
+        "--identity",
+        spec.identity,
+        "--service",
+        spec.service,
+        "--tcp",
+        spec.tcp,
     ]
     if spec.target:
         cmd += ["--target", spec.target]
@@ -92,9 +105,16 @@ def _spawn_bridge(spec: _Bridge) -> subprocess.Popen:
 
 def _spawn_vpn(spec: _Vpn) -> subprocess.Popen:
     cmd = [
-        sys.executable, "-u", "-m", "bridges.vpn",
-        "--config", RNS_CONFIG_DIR,
-        spec.mode, "--identity", spec.identity, *spec.extra_args,
+        sys.executable,
+        "-u",
+        "-m",
+        "bridges.vpn",
+        "--config",
+        RNS_CONFIG_DIR,
+        spec.mode,
+        "--identity",
+        spec.identity,
+        *spec.extra_args,
     ]
     print(f"[supervisor] spawning vpn/{spec.mode}", flush=True)
     return subprocess.Popen(cmd)
@@ -126,9 +146,11 @@ def main() -> None:
     state = [{"spec": s, "proc": spawn(s), "fails": 0, "next": 0.0} for s in specs]
 
     stop = False
+
     def shutdown(_sig, _frame):
         nonlocal stop
         stop = True
+
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
@@ -140,10 +162,12 @@ def main() -> None:
             if entry["next"] == 0.0:
                 delay = RESTART_BACKOFF[min(entry["fails"], len(RESTART_BACKOFF) - 1)]
                 entry["fails"] += 1
-                entry["next"]   = time.time() + delay
-                print(f"[supervisor] {type(entry['spec']).__name__} exited "
-                      f"(rc={entry['proc'].returncode}); restart in {delay}s",
-                      flush=True)
+                entry["next"] = time.time() + delay
+                print(
+                    f"[supervisor] {type(entry['spec']).__name__} exited "
+                    f"(rc={entry['proc'].returncode}); restart in {delay}s",
+                    flush=True,
+                )
             elif time.time() >= entry["next"]:
                 entry["proc"] = spawn(entry["spec"])
                 entry["next"] = 0.0
