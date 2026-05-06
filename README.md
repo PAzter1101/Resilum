@@ -17,26 +17,65 @@ traffic.
 
 ## Status
 
-Early planning. Architecture is being prototyped; no usable build yet.
+Multi-arch images (`amd64`, `arm64`) for all four profiles publish
+to **GitHub Container Registry** and **Docker Hub** via
+`semantic-release`. Bidirectional Tor/I2P discovery, SOCKS5 egress
+through the mesh, RNS interface-discovery, auto-selected community
+bootstraps — all working end to end. L3-VPN tun-mode (full
+default-route redirect) and the Web UI are planned, not built yet.
 
-## Architecture sketch
+## Architecture
 
-The container exposes a single TUN device into the host's network namespace
-(`--network host` + `/dev/net/tun`). Host applications use that TUN as the
-default route — no WireGuard, no SOCKS proxy, no extra client software.
+What actually exists today is a SOCKS5 proxy on every host, tunnelled
+through Reticulum to a peer with internet, exiting from that peer's
+public IP:
 
-Inside the container, an iptables/nftables policy router decides per
-destination which overlay carries the packet:
+```
+host app  ──ALL_PROXY=socks5h://127.0.0.1:10808──▶  rns_tcp_bridge (connect)
+                                                            │
+                                                            ▼
+                                                     ┌──────────────┐
+                                                     │  Reticulum   │
+                                                     │ (rnsd, MTU-  │
+                                                     │  agnostic,   │
+                                                     │  picks best  │
+                                                     │  underlay)   │
+                                                     └──────┬───────┘
+                            picks dynamically per destination, falls back on failure
+                                                            │
+              ┌─────────────────┬───────────────┬───────────┴──────┬────────────────┐
+              ▼                 ▼               ▼                  ▼                ▼
+        clearnet TCP     Yggdrasil 200::/7   Tor onion          I2P b32        LoRa (radio)
+        (public hubs    (overlay IPv6,     (via local Tor    (via local i2pd
+         from registry,  routes through    SOCKS @9050,      SOCKS @4447,
+         + your own      whatever          rdns=true)        rdns=true)
+         personal        underlays
+         anchors)        still work)
+                                                            │
+                                                            ▼
+                                                rns_tcp_bridge (listen)  on the egress peer
+                                                            │
+                                                            ▼
+                                                  microsocks @127.0.0.1:1080
+                                                            │
+                                                            ▼
+                                                  socket.connect(host:port)
+                                                            │
+                                                            ▼
+                                                     clearnet — egress
+                                                     peer's public IP
+```
 
-- **clearnet IP** → Tor TransProxy → Tor exit
-- **Yggdrasil `200::/7`** → directly into the `yggdrasil0` interface
-- **internal RNS destinations** → Reticulum native, no IP encapsulation
+Both ends of the SOCKS path are symmetric: every Resilum node runs both
+the listen side (so it's a potential exit for others) and the connect
+side (so its own apps can use someone else's exit), mirroring how Tor
+relays work — using the network = being part of the network. Targets
+are discovered automatically through signed RNS announces; no static
+peer lists.
 
-Reticulum (`rnsd`) sits below all of those and aggregates every available
-underlying transport. It announces destinations through every enabled
-interface in parallel and dynamically picks the best path per destination.
-When one underlay dies (clearnet blocked, peer offline, LoRa link lost),
-RNS reroutes through the next without disconnecting active sessions.
+When one underlay dies (clearnet blocked, peer offline, LoRa link
+lost), Reticulum reroutes through the next without dropping the
+active session.
 
 ## Bundled transports
 
@@ -44,13 +83,13 @@ RNS reroutes through the next without disconnecting active sessions.
 |---|---|---|
 | TCP / UDP / AutoInterface | Reticulum core | ready |
 | LoRa (RNode hardware) | Reticulum core + RTNode firmware | ready |
-| I2P | Reticulum core via `i2pd` | ready |
-| Email (IMAP/SMTP, fixed-size, locale-camo) | [TechVoid-Co/rns-covert-transport](https://github.com/TechVoid-Co/rns-covert-transport) | ready |
-| ICMP-tunnel | [matvik22000/rns-over-icmp](https://github.com/matvik22000/rns-over-icmp) | ready |
-| DNS-tunnel (iodine) | community recipe | ready |
-| Meshtastic radios | [Nursedude/RNS-Meshtastic-Gateway-Tool](https://github.com/Nursedude/RNS-Meshtastic-Gateway-Tool) | ready |
 | Yggdrasil-IPv6 mesh | [yggdrasil-network/yggdrasil-go](https://github.com/yggdrasil-network/yggdrasil-go) | ready |
-| Tor onion as RNS-link | needs custom bridge (planned) | TODO |
+| Tor onion as RNS-link | local Tor SOCKS + custom `SocksTCPClientInterface` | ready |
+| I2P b32 as RNS-link | local i2pd SOCKS + custom `SocksTCPClientInterface` | ready |
+| Meshtastic radios | [Nursedude/RNS-Meshtastic-Gateway-Tool](https://github.com/Nursedude/RNS-Meshtastic-Gateway-Tool) | bundled, not yet wired into discovery |
+| Email (IMAP/SMTP, fixed-size, locale-camo) | [TechVoid-Co/rns-covert-transport](https://github.com/TechVoid-Co/rns-covert-transport) | bundled in covert profile, integration planned |
+| ICMP-tunnel | [matvik22000/rns-over-icmp](https://github.com/matvik22000/rns-over-icmp) | bundled in covert profile, integration planned |
+| DNS-tunnel (iodine) | community recipe | binary in covert profile, integration planned |
 
 ## Image profiles
 
@@ -71,7 +110,7 @@ upgrade paths are linear. Multi-arch builds (`amd64`, `arm64`) via
 `docker buildx`, so the same tag pulls the right binary on an Orange Pi,
 a Raspberry Pi 4/5, or an x86 laptop.
 
-`debian:bookworm-slim` base, multi-stage build, no Rust toolchain, runtime
+`debian:trixie-slim` base, multi-stage build, no Rust toolchain, runtime
 only in the final layer.
 
 ## Where to run it
@@ -91,14 +130,23 @@ enabled in the config and whether a radio is attached.
 
 ## Quick start
 
-We publish multi-arch images (`amd64`, `arm64`) to GitHub
-Container Registry. Docker pulls the right binary for your CPU
-automatically on `docker compose up` — there is **no need to know your
-own architecture or to build anything locally**. (If you are curious:
-`uname -m` returns `x86_64` for AMD/Intel and `aarch64` for 64-bit ARM,
-which covers virtually every modern SBC — Raspberry Pi 4/5, Orange Pi,
-Rock Pi, etc. 32-bit ARM hosts like the original Pi Zero W are not
-published; build locally if you really need that target.)
+We publish multi-arch images (`amd64`, `arm64`) to **GitHub
+Container Registry** and **Docker Hub** in lock-step on every
+release:
+
+- `ghcr.io/pazter1101/resilum:<profile>` (and `:<profile>-<version>`)
+- `pazter1101/resilum:<profile>` (and `:<profile>-<version>`)
+
+The default `docker-compose.yml` references the GHCR tag; switch
+to Docker Hub by editing the `image:` line if GHCR is unreachable.
+Docker pulls the right binary for your CPU automatically on
+`docker compose up` — there is **no need to know your own
+architecture or to build anything locally**. (If you are curious:
+`uname -m` returns `x86_64` for AMD/Intel and `aarch64` for 64-bit
+ARM, which covers virtually every modern SBC — Raspberry Pi 4/5,
+Orange Pi, Rock Pi, etc. 32-bit ARM hosts like the original Pi
+Zero W are not published; build locally if you really need that
+target.)
 
 The supplied `docker-compose.yml` exposes two run modes via Compose
 profiles — pick the one that matches your hardware. The first command
@@ -106,12 +154,28 @@ pulls the image; subsequent runs use the cached copy.
 
 ### Without LoRa hardware
 
-VPS, SBC, or laptop with no radio plugged in. Reticulum talks to the rest
-of the mesh over whatever transports are enabled in the config (clearnet
-TCP, Yggdrasil, Tor, email, ...).
+VPS, SBC, or laptop with no radio plugged in. Reticulum talks to the
+rest of the mesh over whatever transports are enabled in the config
+(clearnet TCP, Yggdrasil, Tor, I2P, ...).
 
 ```bash
 docker compose --profile headless up
+```
+
+After ≈30 seconds the node has a working SOCKS5 endpoint at
+`127.0.0.1:10808`. Point any app there to exit through some peer
+that's also running Resilum:
+
+```bash
+curl --socks5-hostname 127.0.0.1:10808 https://api.ipify.org
+# → public IP of whichever peer the discovery layer picked as your egress
+```
+
+Override the local port if 10808 collides with anything else
+(Xray's default is also 10808):
+
+```bash
+RESILUM_SOCKS_PORT=10807 docker compose --profile headless up
 ```
 
 ### With a LoRa radio (Heltec V4 / RNode)
@@ -139,9 +203,12 @@ differs.
 
 ### Networking
 
-`network_mode: host` is required so the in-container TUN appears on the
-host side as a regular interface and host-level policy routing can target
-it directly — no WireGuard or other VPN software is needed on the host.
+`network_mode: host` so the SOCKS5 endpoint binds on the host's
+loopback (`127.0.0.1:10808`) where local apps can reach it without
+extra port-mapping. No iptables, no WireGuard, no kernel modules
+required for the current SOCKS-mode runtime. Future L3-VPN mode
+will additionally need `/dev/net/tun` and `cap_add: NET_ADMIN`,
+both already wired in the supplied compose file.
 
 ## Building from source
 
@@ -161,17 +228,30 @@ docker compose build --build-arg PROFILE=lora
 
 ## Roadmap
 
-1. **MVP**: `base` profile builds, container connects to a public RNS
-   backbone, host can reach clearnet through Tor over a clearnet underlay.
-2. **Bridges**: Tor-pluggable-transport over RNS so Tor itself works through
-   the LoRa-only fallback.
-3. **Web UI**: in-container web console (default `127.0.0.1:8080`) for
-   editing the active set of interfaces, peers, exit policy and viewing
-   per-transport throughput / RTT — replaces hand-editing TOML.
-4. **Open exits**: discovery protocol so any node with clearnet can opt in
-   as a public exit, and clients can find the closest one automatically.
-5. **All four profiles** published to GHCR with multi-arch images
-   (amd64 + arm64).
+Done:
+
+- All four profiles publish multi-arch (`amd64`, `arm64`) to GHCR
+  and Docker Hub on every `dev → main` merge via `semantic-release`.
+- Bidirectional Tor onion + I2P b32 as RNS underlays
+  (`SocksTCPClientInterface`).
+- SOCKS5 egress through the mesh, symmetric (every node both
+  exits and consumes).
+- Auto-discovered targets via signed RNS announces; no static peer
+  lists.
+- Auto-selected community RNS bootstraps from
+  [directory.rns.recipes](https://directory.rns.recipes), with
+  Yggdrasil-IPv6 anchors as the no-clearnet fallback.
+
+Next:
+
+- L3-VPN tun mode for protocols that don't do SOCKS (UDP/QUIC,
+  ICMP, full default-route redirect).
+- Web UI (`127.0.0.1:8080`) for editing interfaces / peers / exit
+  policy and viewing per-transport throughput.
+- Wire the bundled covert transports (email / ICMP / DNS-tunnel)
+  into discovery so they're not just binaries-in-image.
+- Adaptive payload compression for the L3 VPN tunnel (issues
+  #1–#4).
 
 ## Related projects
 

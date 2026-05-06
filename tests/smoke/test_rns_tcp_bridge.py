@@ -39,12 +39,15 @@ def _spawn_bridge(args, log_path):
     """Launch ``python -m rns_tcp_bridge`` with stdout+stderr redirected
     to ``log_path``. PYTHONUNBUFFERED so we can poll the log live."""
     env = {**os.environ, "PYTHONPATH": BRIDGES_DIR, "PYTHONUNBUFFERED": "1"}
-    return subprocess.Popen(
+    log_fh = open(log_path, "w")
+    proc = subprocess.Popen(
         [sys.executable, "-u", "-m", "rns_tcp_bridge", *args],
-        stdout=open(log_path, "w"),
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
         env=env,
     )
+    log_fh.close()  # subprocess inherits the fd; we can release our copy
+    return proc
 
 
 def _wait_for_hash(log_path, timeout):
