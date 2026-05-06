@@ -8,6 +8,7 @@ the temporary file pytest creates.
 import textwrap
 
 import pytest
+
 from supervisor import load
 
 

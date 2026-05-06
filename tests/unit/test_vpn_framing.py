@@ -1,6 +1,7 @@
 """Unit tests for the VPN length-prefix framing helper."""
 
 import pytest
+
 from vpn import framing
 
 
