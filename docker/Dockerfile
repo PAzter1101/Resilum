@@ -49,7 +49,7 @@ RUN groupadd -g 1000 resilum && \
 # `--break-system-packages` is required on Debian 12+ to install into the
 # system Python; we deliberately avoid a venv to keep image size minimal
 # and the entrypoint trivial.
-RUN pip install --no-cache-dir --break-system-packages --ignore-installed rns pyyaml
+RUN pip install --no-cache-dir --break-system-packages --ignore-installed rns lxmf pyyaml
 
 # ─── lora ───────────────────────────────────────────────────────────────────
 # Minimum viable Reticulum node: native interfaces (TCP/UDP/AutoInterface)
@@ -72,10 +72,18 @@ FROM profile-lora AS profile-mesh
 # Both yggdrasil and i2pd come from Debian trixie main; the 0.5.x
 # yggdrasil is wire-compatible with the global mesh, no backports or
 # third-party CDN involved.
+#
+# microsocks is a tiny (~10 KB), no-config SOCKS5 server. We bind it
+# to 127.0.0.1 inside the container only — it is never directly
+# reachable from outside. Its job is to be the egress endpoint behind
+# our SOCKS-egress bridge: incoming RNS Links (from clients elsewhere
+# in the mesh) terminate here and microsocks does the actual outbound
+# connect from the VPS's public IP.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         yggdrasil \
         i2pd \
+        microsocks \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── covert ─────────────────────────────────────────────────────────────────
@@ -98,7 +106,8 @@ RUN apt-get update && \
 # `pip install` invocations in higher-superset profiles (e.g. `full`).
 RUN pip install --no-cache-dir --break-system-packages --ignore-installed \
         scapy \
-        rns-covert-transport
+        rns-covert-transport \
+        pysocks
 
 # ─── full ───────────────────────────────────────────────────────────────────
 # Everything plus the Meshtastic gateway. Pulls the largest dependency set

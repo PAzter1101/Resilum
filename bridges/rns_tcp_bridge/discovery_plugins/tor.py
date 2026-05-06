@@ -13,7 +13,7 @@ Tor SOCKS5 proxy (127.0.0.1:9050).
 import re
 
 import RNS
-from RNS.Interfaces.TCPInterface import TCPClientInterface
+from socks_tcp_interface import SocksTCPClientInterface
 
 from .base import DiscoveryPlugin
 
@@ -42,7 +42,7 @@ class _Tor(DiscoveryPlugin):
             getattr(iface, "name", "") == name for iface in RNS.Transport.interfaces
         ):
             return
-        iface = TCPClientInterface(
+        iface = SocksTCPClientInterface(
             owner=RNS.Transport,
             configuration={
                 "name": name,

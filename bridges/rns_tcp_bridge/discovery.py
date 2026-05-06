@@ -11,12 +11,12 @@ from typing import Optional
 
 import RNS
 
-from . import cache
+from . import announce_trigger, cache
+from .constants import ANNOUNCE_INTERVAL_SECONDS
 from .discovery_plugins import DiscoveryPlugin
 from .discovery_plugins import load as load_plugin
 
 ASPECT_PREFIX = ["resilum", "discovery"]
-ANNOUNCE_INTERVAL_SECONDS = 6 * 60 * 60
 TTL_SECONDS = 24 * 60 * 60
 TOP_N_ACTIVE = 10
 PRUNE_INTERVAL_SECONDS = 60 * 60
@@ -56,6 +56,7 @@ def _restore_top_n(plugin: DiscoveryPlugin, cache_path: str) -> None:
 
 
 def _announce_loop(destination, plugin: DiscoveryPlugin, service: str) -> None:
+    trigger = announce_trigger.register()
     while True:
         try:
             payload = plugin.produce_endpoint()
@@ -63,7 +64,8 @@ def _announce_loop(destination, plugin: DiscoveryPlugin, service: str) -> None:
             RNS.log(f"[discovery:{service}] announced {payload!r}", RNS.LOG_DEBUG)
         except Exception as exc:
             RNS.log(f"[discovery:{service}] announce skipped: {exc}", RNS.LOG_DEBUG)
-        time.sleep(ANNOUNCE_INTERVAL_SECONDS)
+        if trigger.wait(ANNOUNCE_INTERVAL_SECONDS):
+            trigger.clear()
 
 
 def _prune_loop(cache_path: str) -> None:

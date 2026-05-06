@@ -24,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 black isort mypy types-PyYAML pytest rns pyyaml
+        pip install flake8 black isort mypy types-PyYAML pytest rns pyyaml pysocks
 
     - name: Check code formatting with Black
       run: black --check --diff bridges/ scripts/ tests/
@@ -35,13 +35,16 @@ jobs:
     - name: Lint with flake8
       run: |
         flake8 bridges/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 bridges/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+        flake8 bridges/ scripts/ --count --max-complexity=10 --max-line-length=88 --statistics
 
     - name: Type check with mypy
       run: mypy --ignore-missing-imports bridges/ scripts/
 
     - name: Run unit tests
       run: pytest tests/unit -v
+
+    - name: Run smoke tests
+      run: pytest tests/smoke -v
 
   shellcheck:
     runs-on: ubuntu-latest
@@ -62,11 +65,11 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
     - name: Build (no push) — verify ${{ matrix.profile }} on amd64 + arm64
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v7
       with:
         context: .
         file: docker/Dockerfile

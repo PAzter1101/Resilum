@@ -12,6 +12,8 @@ from .constants import DEFAULT_ASPECTS, LINK_ESTABLISH_TIMEOUT, PATH_REQUEST_TIM
 from .identity import load_or_create_identity
 from .pump import wire_link_to_socket
 
+TARGET_DISCOVERY_TIMEOUT = 90
+
 
 def _resolve_target(target_hash, aspects):
     """Return an OUT-direction destination for ``target_hash``, kicking
@@ -78,16 +80,110 @@ def _handle_outbound(sock, target_hash, aspects):
     wire_link_to_socket(link, sock, label="connect")
 
 
-def run(args):
-    if not args.target:
-        sys.exit(
-            "connect mode currently requires --target <hex-hash>; "
-            "automatic discovery via aspect-only path-request is on the roadmap"
+def _hash_from_identity_file(identity_path: str, aspects: list) -> bytes | None:
+    """Return the destination hash that a listen-bridge with the given
+    identity file would announce on the given aspects, without
+    registering anything with Transport. Used by the connect-bridge to
+    skip its own listen-bridge during auto-discovery."""
+    try:
+        identity = load_or_create_identity(identity_path)
+    except Exception as exc:
+        RNS.log(
+            f"[bridge:connect] could not load skip-self identity "
+            f"{identity_path}: {exc}",
+            RNS.LOG_WARNING,
         )
+        return None
+    # OUT-mode Destination computes the same hash as IN-mode but does
+    # not register with Transport, so this won't conflict with the real
+    # listen-bridge running in a sibling process.
+    sibling = RNS.Destination(
+        identity, RNS.Destination.OUT, RNS.Destination.SINGLE, *aspects
+    )
+    h: bytes = sibling.hash
+    return h
 
+
+def _wait_for_announced_target(
+    aspects: list, timeout: float, skip_hashes: set[bytes]
+) -> bytes | None:
+    """Block until an RNS announce on the joined aspects arrives from
+    a destination not in ``skip_hashes``, then return that hash. The
+    listen-side bridge announces every ANNOUNCE_INTERVAL_SECONDS, so
+    we only need to hear one matching announce."""
+    discovered: list[bytes] = []
+    seen = threading.Event()
+    aspect_filter = ".".join(aspects)
+
+    class _Handler:
+        # RNS' AnnounceHandler API is duck-typed by attribute name.
+        # `aspect_filter` narrows what announces we receive;
+        # `receive_path_responses=False` is the conventional value
+        # for non-Transport handlers.
+        def __init__(self):
+            self.aspect_filter = aspect_filter
+            self.receive_path_responses = False
+
+        def received_announce(self, destination_hash, announced_identity, app_data):
+            del announced_identity, app_data  # unused but required by RNS API
+            if destination_hash in skip_hashes:
+                RNS.log(
+                    f"[bridge:connect] ignoring announce from self "
+                    f"{RNS.prettyhexrep(destination_hash)}",
+                    RNS.LOG_DEBUG,
+                )
+                return
+            discovered.append(destination_hash)
+            seen.set()
+
+    handler = _Handler()
+    RNS.Transport.register_announce_handler(handler)
+    try:
+        return discovered[0] if seen.wait(timeout) else None
+    finally:
+        try:
+            RNS.Transport.deregister_announce_handler(handler)
+        except Exception:
+            pass
+
+
+def run(args):
     load_or_create_identity(args.identity)
     aspects = DEFAULT_ASPECTS + [args.service]
-    target_hash = bytes.fromhex(args.target)
+
+    if args.target:
+        target_hash = bytes.fromhex(args.target)
+    else:
+        skip_hashes: set[bytes] = set()
+        for path in getattr(args, "skip_self_identity", []) or []:
+            h = _hash_from_identity_file(path, aspects)
+            if h is not None:
+                skip_hashes.add(h)
+                RNS.log(
+                    f"[bridge:connect] will skip self-announce "
+                    f"{RNS.prettyhexrep(h)} (from {path})",
+                    RNS.LOG_VERBOSE,
+                )
+        RNS.log(
+            f"[bridge:connect] no --target given, listening for announces on "
+            f"{'.'.join(aspects)} (timeout {TARGET_DISCOVERY_TIMEOUT}s, "
+            f"{len(skip_hashes)} self-hashes ignored)",
+            RNS.LOG_INFO,
+        )
+        target_hash = _wait_for_announced_target(
+            aspects, TARGET_DISCOVERY_TIMEOUT, skip_hashes
+        )
+        if target_hash is None:
+            sys.exit(
+                f"no non-self announce on {'.'.join(aspects)} within "
+                f"{TARGET_DISCOVERY_TIMEOUT}s; cannot start without target"
+            )
+        RNS.log(
+            f"[bridge:connect] auto-discovered target "
+            f"{RNS.prettyhexrep(target_hash)}",
+            RNS.LOG_INFO,
+        )
+
     tcp_host, tcp_port = args.tcp.rsplit(":", 1)
     tcp_port = int(tcp_port)
 
