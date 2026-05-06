@@ -48,6 +48,22 @@ x-resilum-base: &resilum-base
     ENABLE_I2PD: "0"
     ENABLE_TOR: "1"
     ENABLE_IODINE: "0"
+    # Local SOCKS5 server (microsocks) so this node can serve as a
+    # public-IP egress for other mesh peers. Symmetric by default,
+    # mirroring how Tor relays work: using the network = being part
+    # of the network. Operators who specifically don't want to be
+    # used as an exit can set ENABLE_SOCKS_EGRESS=0 (and ideally also
+    # disable the `listen socks-egress` entry in bridges.yaml).
+    ENABLE_SOCKS_EGRESS: "${ENABLE_SOCKS_EGRESS:-1}"
+    # Port microsocks listens on, container-internal. Bridge listen
+    # entry in bridges.yaml forwards RNS Links here. Stays inside the
+    # container — never exposed to the host.
+    RESILUM_SOCKS_EGRESS_PORT: "${RESILUM_SOCKS_EGRESS_PORT:-1080}"
+    # Port the connect-side bridge exposes on the host loopback for
+    # local apps (curl, browser, ALL_PROXY env). Override per machine
+    # via shell env or .env file when 10808 conflicts with other
+    # SOCKS proxies (Xray's default is also 10808).
+    RESILUM_SOCKS_PORT: "${RESILUM_SOCKS_PORT:-10808}"
 
 services:
   # Run mode without LoRa hardware. Suitable for VPS, SBC bridges or just
