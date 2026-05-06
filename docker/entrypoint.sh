@@ -31,10 +31,16 @@ seed_default() {
 seed_default yggdrasil.conf
 seed_default bridges.yaml
 seed_default torrc
+seed_default i2pd.conf
+seed_default i2pd-tunnels.conf
 
 # Tor needs writeable state and hidden-service directories under /config.
 mkdir -p /config/tor/data /config/tor/hidden_service
 chmod 700 /config/tor/hidden_service 2>/dev/null || true
+
+# i2pd's datadir, generated keys and the exported hostname all live
+# under /config/i2p/ so they survive container restarts.
+mkdir -p /config/i2p/data /config/i2p/keys /config/i2p/hidden_service
 
 # RNS config lives at $CONFIG_DIR/config (no file extension by convention).
 if [ ! -f "$CONFIG_DIR/config" ] && [ -f /opt/resilum/defaults/reticulum.config ]; then
@@ -77,10 +83,20 @@ run_if_enabled() {
 }
 
 run_if_enabled ENABLE_YGGDRASIL    yggdrasil   -useconffile /config/yggdrasil.conf
-run_if_enabled ENABLE_I2PD         i2pd        --conf=/config/i2pd.conf
+run_if_enabled ENABLE_I2PD         i2pd        --datadir=/config/i2p --conf=/config/i2pd.conf
 run_if_enabled ENABLE_TOR          tor         -f /config/torrc
 run_if_enabled ENABLE_IODINE       iodine      -f -P "${IODINE_PASSWORD:-}" "${IODINE_TOPDOMAIN:-}"
 run_if_enabled ENABLE_SOCKS_EGRESS microsocks  -i 127.0.0.1 -p "${RESILUM_SOCKS_EGRESS_PORT:-1080}"
+
+# When i2pd is enabled, derive the .b32.i2p hostname of our server
+# tunnel from the keys file i2pd generates on first start, and write
+# it where the i2p discovery plugin reads it from. Runs in the
+# background — the helper polls the keys file and exits once written.
+if [ "$(printenv ENABLE_I2PD || echo 0)" = "1" ] && command -v i2pd >/dev/null 2>&1; then
+    python3 /opt/resilum/scripts/i2pd_export_hostname.py \
+        /config/i2p/keys/rns-server.dat \
+        /config/i2p/hidden_service/hostname &
+fi
 
 # rnsd MUST start before the bridge supervisor. If the supervisor's
 # `import RNS; RNS.Reticulum(...)` runs first, *it* claims the

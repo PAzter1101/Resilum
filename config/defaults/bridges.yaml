@@ -33,6 +33,21 @@ bridges:
     identity: /config/bridges/tor.id
     tcp: 127.0.0.1:9050
 
+  # I2P SOCKS gateway, mirroring the Tor block above:
+  #
+  #   1. The discovery plugin reads our local i2pd server-tunnel's
+  #      .b32.i2p hostname (derived from the keys file by
+  #      scripts/i2pd_export_hostname.py at boot) and broadcasts it
+  #      as the announce payload.
+  #
+  #   2. The bridge tunnel forwards each incoming RNS Link to i2pd's
+  #      SOCKS5 listener (127.0.0.1:4447), so Resilum nodes without
+  #      i2pd of their own can use ours as an I2P-exit-as-a-service.
+  - mode: listen
+    service: i2p
+    identity: /config/bridges/i2p.id
+    tcp: 127.0.0.1:4447
+
   # ── To dial a remote service through Reticulum, add a `connect`
   # ── entry like the example below and replace the `target` with the
   # ── destination hash printed by the remote node's listen-side

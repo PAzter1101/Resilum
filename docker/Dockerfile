@@ -106,7 +106,8 @@ RUN apt-get update && \
 # `pip install` invocations in higher-superset profiles (e.g. `full`).
 RUN pip install --no-cache-dir --break-system-packages --ignore-installed \
         scapy \
-        rns-covert-transport
+        rns-covert-transport \
+        pysocks
 
 # ─── full ───────────────────────────────────────────────────────────────────
 # Everything plus the Meshtastic gateway. Pulls the largest dependency set
