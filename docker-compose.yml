@@ -45,7 +45,7 @@ x-resilum-base: &resilum-base
     # transports require operator-specific configuration (Tor relays,
     # I2P routers, DNS-tunnel domains) and are opt-in.
     ENABLE_YGGDRASIL: "1"
-    ENABLE_I2PD: "0"
+    ENABLE_I2PD: "1"
     ENABLE_TOR: "1"
     ENABLE_IODINE: "0"
     # Local SOCKS5 server (microsocks) so this node can serve as a

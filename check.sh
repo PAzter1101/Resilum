@@ -130,10 +130,20 @@ if [ "$RUN_DOCKER" = true ]; then
     echo "🏗️  Step 5: Docker Build (profile=$DOCKER_PROFILE)"
     echo "----------------------------------------------"
     if command -v docker &> /dev/null && docker info &> /dev/null; then
-        docker build -f docker/Dockerfile --build-arg PROFILE="$DOCKER_PROFILE" -t "resilum:check-$DOCKER_PROFILE" .
-        echo "✓ Image built: resilum:check-$DOCKER_PROFILE"
+        # `buildx --load` materialises the image in the local Docker
+        # engine. `docker compose build` on Docker Desktop puts the
+        # image into BuildKit's isolated cache only, which then makes
+        # `compose up` fall back to pulling the published tag from
+        # GHCR — i.e. the local rebuild silently does nothing.
+        docker buildx build --load \
+            -f docker/Dockerfile \
+            --build-arg "PROFILE=$DOCKER_PROFILE" \
+            -t "ghcr.io/pazter1101/resilum:$DOCKER_PROFILE" \
+            -t "resilum:check-$DOCKER_PROFILE" \
+            .
+        echo "✓ Image built: resilum:check-$DOCKER_PROFILE (also tagged ghcr.io/pazter1101/resilum:$DOCKER_PROFILE for compose)"
     elif command -v podman &> /dev/null; then
-        podman build -f docker/Dockerfile --build-arg PROFILE="$DOCKER_PROFILE" -t "resilum:check-$DOCKER_PROFILE" .
+        podman build -f docker/Dockerfile --build-arg "PROFILE=$DOCKER_PROFILE" -t "resilum:check-$DOCKER_PROFILE" .
         echo "✓ Image built: resilum:check-$DOCKER_PROFILE"
     else
         echo "⚠️  No container runtime available, skipping build"
