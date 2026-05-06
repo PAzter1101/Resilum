@@ -67,7 +67,7 @@ fi
 # shellcheck source=/dev/null
 source .venv-check/bin/activate
 pip install --upgrade pip > /dev/null 2>&1
-pip install flake8 black isort mypy types-PyYAML rns pyyaml > /dev/null 2>&1
+pip install flake8 black isort mypy types-PyYAML rns pyyaml pysocks > /dev/null 2>&1
 
 if [ "$NO_FIX" = true ]; then
     echo "  → black --check --diff ${SOURCE_DIRS[*]}"
