@@ -78,8 +78,14 @@ bridges:
     identity: /config/bridges/socks-egress.id
     tcp: 127.0.0.1:${RESILUM_SOCKS_EGRESS_PORT:-1080}
 
+  # The connect side carries a fallback chain: try the public-IP
+  # `socks-egress` of any peer first; if no such target is currently
+  # known, fall back to the `tor` listen-bridge of any peer (their
+  # local Tor SOCKS, exit IP is some Tor exit node, not the peer's).
+  # `services` is tried in order on every inbound TCP connection, the
+  # first that yields a working RNS Link wins.
   - mode: connect
-    service: socks-egress
+    services: [socks-egress, tor]
     identity: /config/bridges/socks-egress-out.id
     tcp: 127.0.0.1:${RESILUM_SOCKS_PORT:-10808}
 

@@ -1,5 +1,12 @@
 """Connect mode: listen on a local TCP port and tunnel each connection
-through an RNS Link to a known anchor identity."""
+through an RNS Link to a known anchor identity.
+
+Supports a priority list of services so a single TCP endpoint can
+fall through transports — e.g. try ``socks-egress`` first (direct
+public-IP exit), fall back to ``tor`` (Tor SOCKS via mesh) if the
+direct egress is unreachable. Both the discovery half (announce
+handlers) and the dispatch half (per-connection target picker) honour
+the order in which services were given on the command line."""
 
 import socket
 import sys
@@ -55,29 +62,58 @@ def _open_link(target_dest, target_hash):
     return link
 
 
-def _handle_outbound(sock, target_hash, aspects):
+def _try_one_service(sock, service: str, target_hash: bytes, aspects: list) -> bool:
+    """Attempt to dispatch ``sock`` through one service's target. Returns
+    True if the Link is up and the pump is wired (caller must NOT close
+    the socket)."""
     RNS.log(
-        f"[bridge:connect] resolving target {RNS.prettyhexrep(target_hash)}",
+        f"[bridge:connect/{service}] resolving target "
+        f"{RNS.prettyhexrep(target_hash)}",
         RNS.LOG_VERBOSE,
     )
     target_dest = _resolve_target(target_hash, aspects)
     if target_dest is None:
         RNS.log(
-            f"[bridge:connect] no path to {RNS.prettyhexrep(target_hash)} "
-            f"after {PATH_REQUEST_TIMEOUT}s, dropping TCP connection",
+            f"[bridge:connect/{service}] no path to "
+            f"{RNS.prettyhexrep(target_hash)} after {PATH_REQUEST_TIMEOUT}s",
             RNS.LOG_WARNING,
         )
-        sock.close()
-        return
+        return False
 
-    RNS.log("[bridge:connect] target resolved, opening Link", RNS.LOG_VERBOSE)
     link = _open_link(target_dest, target_hash)
     if link is None:
-        sock.close()
-        return
+        return False
 
-    RNS.log("[bridge:connect] Link active, wiring TCP", RNS.LOG_VERBOSE)
-    wire_link_to_socket(link, sock, label="connect")
+    RNS.log(
+        f"[bridge:connect/{service}] Link active, wiring TCP",
+        RNS.LOG_VERBOSE,
+    )
+    wire_link_to_socket(link, sock, label=f"connect/{service}")
+    return True
+
+
+def _handle_outbound(sock, services: list, targets, lock):
+    """Try each service in priority order. On the first one that yields
+    a working Link, hand the socket off to the pump and return. If all
+    services fail, close the socket."""
+    for service in services:
+        with lock:
+            target_hash = targets.get(service)
+        if target_hash is None:
+            RNS.log(
+                f"[bridge:connect/{service}] no target known yet, skipping",
+                RNS.LOG_DEBUG,
+            )
+            continue
+        aspects = DEFAULT_ASPECTS + [service]
+        if _try_one_service(sock, service, target_hash, aspects):
+            return
+    RNS.log(
+        "[bridge:connect] no service in fallback chain yielded a Link, "
+        "dropping TCP connection",
+        RNS.LOG_WARNING,
+    )
+    sock.close()
 
 
 def _hash_from_identity_file(identity_path: str, aspects: list) -> bytes | None:
@@ -94,9 +130,6 @@ def _hash_from_identity_file(identity_path: str, aspects: list) -> bytes | None:
             RNS.LOG_WARNING,
         )
         return None
-    # OUT-mode Destination computes the same hash as IN-mode but does
-    # not register with Transport, so this won't conflict with the real
-    # listen-bridge running in a sibling process.
     sibling = RNS.Destination(
         identity, RNS.Destination.OUT, RNS.Destination.SINGLE, *aspects
     )
@@ -104,85 +137,106 @@ def _hash_from_identity_file(identity_path: str, aspects: list) -> bytes | None:
     return h
 
 
-def _wait_for_announced_target(
-    aspects: list, timeout: float, skip_hashes: set[bytes]
-) -> bytes | None:
-    """Block until an RNS announce on the joined aspects arrives from
-    a destination not in ``skip_hashes``, then return that hash. The
-    listen-side bridge announces every ANNOUNCE_INTERVAL_SECONDS, so
-    we only need to hear one matching announce."""
-    discovered: list[bytes] = []
-    seen = threading.Event()
+def _make_announce_handler(
+    service: str, aspects: list, skip_hashes: set, targets: dict, lock
+):
+    """Persistent announce handler — stays registered for the bridge's
+    whole lifetime, refreshing the target hash each time the service's
+    listen-side re-announces (or a fresh peer joins)."""
     aspect_filter = ".".join(aspects)
 
     class _Handler:
-        # RNS' AnnounceHandler API is duck-typed by attribute name.
-        # `aspect_filter` narrows what announces we receive;
-        # `receive_path_responses=False` is the conventional value
-        # for non-Transport handlers.
         def __init__(self):
             self.aspect_filter = aspect_filter
             self.receive_path_responses = False
 
         def received_announce(self, destination_hash, announced_identity, app_data):
-            del announced_identity, app_data  # unused but required by RNS API
+            del announced_identity, app_data
             if destination_hash in skip_hashes:
                 RNS.log(
-                    f"[bridge:connect] ignoring announce from self "
+                    f"[bridge:connect/{service}] ignoring self-announce "
                     f"{RNS.prettyhexrep(destination_hash)}",
                     RNS.LOG_DEBUG,
                 )
                 return
-            discovered.append(destination_hash)
-            seen.set()
+            with lock:
+                previous = targets.get(service)
+                targets[service] = destination_hash
+            if previous != destination_hash:
+                RNS.log(
+                    f"[bridge:connect/{service}] target now "
+                    f"{RNS.prettyhexrep(destination_hash)}",
+                    RNS.LOG_INFO,
+                )
 
-    handler = _Handler()
-    RNS.Transport.register_announce_handler(handler)
-    try:
-        return discovered[0] if seen.wait(timeout) else None
-    finally:
-        try:
-            RNS.Transport.deregister_announce_handler(handler)
-        except Exception:
-            pass
+    return _Handler()
+
+
+def _build_skip_hashes(skip_self_paths, services):
+    """Per-service skip-self set: each listen-bridge identity is
+    interpreted with each service's aspect to derive the destination
+    hash that node's listen-bridge would announce. We skip every
+    combination so own-announces never end up as a target."""
+    skips: dict = {service: set() for service in services}
+    for path in skip_self_paths or []:
+        for service in services:
+            aspects = DEFAULT_ASPECTS + [service]
+            h = _hash_from_identity_file(path, aspects)
+            if h is not None:
+                skips[service].add(h)
+                RNS.log(
+                    f"[bridge:connect/{service}] will skip self-announce "
+                    f"{RNS.prettyhexrep(h)} (from {path})",
+                    RNS.LOG_VERBOSE,
+                )
+    return skips
+
+
+def _wait_for_any_target(targets, lock, services, timeout):
+    """Block until at least one of the services in ``services`` has a
+    target hash in the shared dict, or the timeout elapses."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        with lock:
+            if any(targets.get(s) is not None for s in services):
+                return True
+        time.sleep(0.5)
+    return False
 
 
 def run(args):
     load_or_create_identity(args.identity)
-    aspects = DEFAULT_ASPECTS + [args.service]
+    services = list(args.service) if args.service else ["generic"]
+
+    targets: dict = {}
+    lock = threading.Lock()
 
     if args.target:
-        target_hash = bytes.fromhex(args.target)
+        # Legacy single-target mode: --target overrides discovery for
+        # the first listed service.
+        targets[services[0]] = bytes.fromhex(args.target)
     else:
-        skip_hashes: set[bytes] = set()
-        for path in getattr(args, "skip_self_identity", []) or []:
-            h = _hash_from_identity_file(path, aspects)
-            if h is not None:
-                skip_hashes.add(h)
-                RNS.log(
-                    f"[bridge:connect] will skip self-announce "
-                    f"{RNS.prettyhexrep(h)} (from {path})",
-                    RNS.LOG_VERBOSE,
-                )
+        skips = _build_skip_hashes(getattr(args, "skip_self_identity", []), services)
+        for service in services:
+            handler = _make_announce_handler(
+                service,
+                DEFAULT_ASPECTS + [service],
+                skips[service],
+                targets,
+                lock,
+            )
+            RNS.Transport.register_announce_handler(handler)
         RNS.log(
-            f"[bridge:connect] no --target given, listening for announces on "
-            f"{'.'.join(aspects)} (timeout {TARGET_DISCOVERY_TIMEOUT}s, "
-            f"{len(skip_hashes)} self-hashes ignored)",
+            f"[bridge:connect] services in priority order: "
+            f"{services}; waiting up to {TARGET_DISCOVERY_TIMEOUT}s for "
+            "the first announce on any of them",
             RNS.LOG_INFO,
         )
-        target_hash = _wait_for_announced_target(
-            aspects, TARGET_DISCOVERY_TIMEOUT, skip_hashes
-        )
-        if target_hash is None:
+        if not _wait_for_any_target(targets, lock, services, TARGET_DISCOVERY_TIMEOUT):
             sys.exit(
-                f"no non-self announce on {'.'.join(aspects)} within "
+                f"no announce on any of {services} within "
                 f"{TARGET_DISCOVERY_TIMEOUT}s; cannot start without target"
             )
-        RNS.log(
-            f"[bridge:connect] auto-discovered target "
-            f"{RNS.prettyhexrep(target_hash)}",
-            RNS.LOG_INFO,
-        )
 
     tcp_host, tcp_port = args.tcp.rsplit(":", 1)
     tcp_port = int(tcp_port)
@@ -191,9 +245,11 @@ def run(args):
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind((tcp_host, tcp_port))
     listener.listen(8)
+    with lock:
+        snapshot = {s: targets.get(s) for s in services}
     RNS.log(
         f"[bridge:connect] listening on {tcp_host}:{tcp_port}, "
-        f"target {RNS.prettyhexrep(target_hash)}",
+        f"fallback chain: {snapshot}",
         RNS.LOG_INFO,
     )
 
@@ -202,6 +258,6 @@ def run(args):
         RNS.log(f"[bridge:connect] TCP connection from {addr}", RNS.LOG_INFO)
         threading.Thread(
             target=_handle_outbound,
-            args=(sock, target_hash, aspects),
+            args=(sock, services, targets, lock),
             daemon=True,
         ).start()
