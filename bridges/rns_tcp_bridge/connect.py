@@ -15,6 +15,7 @@ import time
 
 import RNS
 
+from . import announce_payload
 from .constants import DEFAULT_ASPECTS, LINK_ESTABLISH_TIMEOUT, PATH_REQUEST_TIMEOUT
 from .identity import load_or_create_identity
 from .pump import wire_link_to_socket
@@ -151,13 +152,17 @@ def _make_announce_handler(
             self.receive_path_responses = False
 
         def received_announce(self, destination_hash, announced_identity, app_data):
-            del announced_identity, app_data
+            del announced_identity
             if destination_hash in skip_hashes:
                 RNS.log(
                     f"[bridge:connect/{service}] ignoring self-announce "
                     f"{RNS.prettyhexrep(destination_hash)}",
                     RNS.LOG_DEBUG,
                 )
+                return
+            if announce_payload.parse(app_data) is None:
+                # Already logged inside parse() at the appropriate level
+                # — drop the peer as either malformed or version-mismatched.
                 return
             with lock:
                 previous = targets.get(service)

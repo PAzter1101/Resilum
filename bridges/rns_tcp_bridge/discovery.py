@@ -11,7 +11,7 @@ from typing import Optional
 
 import RNS
 
-from . import announce_trigger, cache
+from . import announce_payload, announce_trigger, cache
 from .constants import ANNOUNCE_INTERVAL_SECONDS
 from .discovery_plugins import DiscoveryPlugin
 from .discovery_plugins import load as load_plugin
@@ -31,13 +31,14 @@ class _AnnounceHandler:
         self.cache_path = cache_path
 
     def received_announce(self, destination_hash, announced_identity, app_data):
-        if not app_data:
+        parsed = announce_payload.parse(app_data)
+        if parsed is None or parsed.endpoint is None:
             return
         records = cache.load(self.cache_path)
-        cache.upsert(records, app_data)
+        cache.upsert(records, parsed.endpoint)
         cache.save(self.cache_path, records)
         try:
-            self.plugin.consume_endpoint(app_data)
+            self.plugin.consume_endpoint(parsed.endpoint)
         except Exception as exc:
             RNS.log(
                 f"[discovery:{self.service}] consume failed: {exc}", RNS.LOG_WARNING
@@ -59,9 +60,9 @@ def _announce_loop(destination, plugin: DiscoveryPlugin, service: str) -> None:
     trigger = announce_trigger.register()
     while True:
         try:
-            payload = plugin.produce_endpoint()
-            destination.announce(app_data=payload)
-            RNS.log(f"[discovery:{service}] announced {payload!r}", RNS.LOG_DEBUG)
+            endpoint = plugin.produce_endpoint()
+            destination.announce(app_data=announce_payload.pack(endpoint))
+            RNS.log(f"[discovery:{service}] announced {endpoint!r}", RNS.LOG_DEBUG)
         except Exception as exc:
             RNS.log(f"[discovery:{service}] announce skipped: {exc}", RNS.LOG_DEBUG)
         if trigger.wait(ANNOUNCE_INTERVAL_SECONDS):

@@ -66,11 +66,14 @@ host app  ──ALL_PROXY=socks5h://127.0.0.1:10808──▶  rns_tcp_bridge (co
                                                      peer's public IP
 ```
 
-Both ends of the SOCKS path are symmetric: every Resilum node runs both
-the listen side (so it's a potential exit for others) and the connect
-side (so its own apps can use someone else's exit), mirroring how Tor
-relays work — using the network = being part of the network. Targets
-are discovered automatically through signed RNS announces; no static
+By default a Resilum node only runs the connect side — its own apps
+can use someone else's exit, but the node does not itself relay other
+peers' traffic out of its public IP. Becoming an exit is opt-in (set
+`ENABLE_SOCKS_EGRESS=1` and uncomment the `listen socks-egress` block
+in `bridges.yaml`); operators take it on knowingly because the IP
+that downstream traffic appears to come from is theirs, with the same
+legal/abuse exposure as a Tor exit or a public VPN. Targets are
+discovered automatically through signed RNS announces; no static
 peer lists.
 
 When one underlay dies (clearnet blocked, peer offline, LoRa link
@@ -234,8 +237,8 @@ Done:
   and Docker Hub on every `dev → main` merge via `semantic-release`.
 - Bidirectional Tor onion + I2P b32 as RNS underlays
   (`SocksTCPClientInterface`).
-- SOCKS5 egress through the mesh, symmetric (every node both
-  exits and consumes).
+- SOCKS5 egress through the mesh; consume by default, opt in to
+  also act as an exit for other peers.
 - Auto-discovered targets via signed RNS announces; no static peer
   lists.
 - Auto-selected community RNS bootstraps from

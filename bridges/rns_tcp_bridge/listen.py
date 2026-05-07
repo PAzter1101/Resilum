@@ -6,7 +6,7 @@ import threading
 
 import RNS
 
-from . import announce_trigger
+from . import announce_payload, announce_trigger
 from .constants import (
     ANNOUNCE_INTERVAL_SECONDS,
     DEFAULT_ASPECTS,
@@ -79,7 +79,7 @@ def run(args):
 
     trigger = announce_trigger.register()
     while True:
-        destination.announce()
+        destination.announce(app_data=announce_payload.pack())
         RNS.log(
             f"[bridge:listen] announced as {'.'.join(aspects)}",
             RNS.LOG_DEBUG,

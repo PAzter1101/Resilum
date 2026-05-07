@@ -10,6 +10,7 @@ import pytest
 
 pytest.importorskip("RNS", reason="Reticulum (rns) not installed")
 
+from rns_tcp_bridge import announce_payload
 from rns_tcp_bridge import connect as module
 
 
@@ -94,7 +95,7 @@ def test_announce_handler_records_target_in_shared_dict():
     handler.received_announce(
         destination_hash=b"\xcc" * 16,
         announced_identity=None,
-        app_data=None,
+        app_data=announce_payload.pack(),
     )
     assert targets == {"tor": b"\xcc" * 16}
 
@@ -112,6 +113,42 @@ def test_announce_handler_ignores_self_hashes():
     )
     handler.received_announce(
         destination_hash=self_hash,
+        announced_identity=None,
+        app_data=announce_payload.pack(),
+    )
+    assert targets == {}
+
+
+def test_announce_handler_drops_incompatible_peer():
+    targets = {}
+    lock = threading.Lock()
+    handler = module._make_announce_handler(
+        service="tor",
+        aspects=["resilum", "bridge", "tcp", "tor"],
+        skip_hashes=set(),
+        targets=targets,
+        lock=lock,
+    )
+    handler.received_announce(
+        destination_hash=b"\xcc" * 16,
+        announced_identity=None,
+        app_data=b'{"v": "999.0.0"}',
+    )
+    assert targets == {}
+
+
+def test_announce_handler_drops_malformed_payload():
+    targets = {}
+    lock = threading.Lock()
+    handler = module._make_announce_handler(
+        service="tor",
+        aspects=["resilum", "bridge", "tcp", "tor"],
+        skip_hashes=set(),
+        targets=targets,
+        lock=lock,
+    )
+    handler.received_announce(
+        destination_hash=b"\xcc" * 16,
         announced_identity=None,
         app_data=None,
     )
