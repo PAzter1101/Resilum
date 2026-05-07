@@ -15,6 +15,7 @@ import re
 import RNS
 from socks_tcp_interface import SocksTCPClientInterface
 
+from ._transport import register_in_transport
 from .base import DiscoveryPlugin
 
 HOSTNAME_PATH = "/config/tor/hidden_service/hostname"
@@ -52,7 +53,7 @@ class _Tor(DiscoveryPlugin):
                 "socks_proxy_port": SOCKS_PORT,
             },
         )
-        RNS.Transport.interfaces.append(iface)
+        register_in_transport(iface)
         RNS.log(f"[discovery:tor] added interface {name} via Tor SOCKS", RNS.LOG_INFO)
 
 
