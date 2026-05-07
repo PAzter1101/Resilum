@@ -1,3 +1,26 @@
+## [0.3.1](https://github.com/PAzter1101/Resilum/compare/v0.3.0...v0.3.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **entrypoint:** generate identity via RNS.Identity, drop rnid -g ([ccdc3e9](https://github.com/PAzter1101/Resilum/commit/ccdc3e9d9cc944df5cbd5508bb87b9053d1481e2))
+
+## Docker Images
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) published to **GitHub Container Registry** and **Docker Hub**:
+
+| Profile | GHCR | Docker Hub |
+|---|---|---|
+| `full` *(default, `latest` alias)* | `ghcr.io/pazter1101/resilum:full-0.3.1` | `pazter1101/resilum:full-0.3.1` |
+| `covert` (Tor + obfs4 + email/ICMP/DNS) | `ghcr.io/pazter1101/resilum:covert-0.3.1` | `pazter1101/resilum:covert-0.3.1` |
+| `mesh` (Yggdrasil + I2P) | `ghcr.io/pazter1101/resilum:mesh-0.3.1` | `pazter1101/resilum:mesh-0.3.1` |
+| `lora` (Reticulum + LoRa only) | `ghcr.io/pazter1101/resilum:lora-0.3.1` | `pazter1101/resilum:lora-0.3.1` |
+
+### Usage
+```bash
+docker compose --profile headless up
+```
+
 # [0.3.0](https://github.com/PAzter1101/Resilum/compare/v0.2.0...v0.3.0) (2026-05-07)
 
 
