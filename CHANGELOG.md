@@ -1,3 +1,26 @@
+## [0.3.2](https://github.com/PAzter1101/Resilum/compare/v0.3.1...v0.3.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* **discovery:** set interface attrs Transport requires ([7c5a5ed](https://github.com/PAzter1101/Resilum/commit/7c5a5ed8f01a98784f5d7d5d16a37fa7d86e1440))
+
+## Docker Images
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) published to **GitHub Container Registry** and **Docker Hub**:
+
+| Profile | GHCR | Docker Hub |
+|---|---|---|
+| `full` *(default, `latest` alias)* | `ghcr.io/pazter1101/resilum:full-0.3.2` | `pazter1101/resilum:full-0.3.2` |
+| `covert` (Tor + obfs4 + email/ICMP/DNS) | `ghcr.io/pazter1101/resilum:covert-0.3.2` | `pazter1101/resilum:covert-0.3.2` |
+| `mesh` (Yggdrasil + I2P) | `ghcr.io/pazter1101/resilum:mesh-0.3.2` | `pazter1101/resilum:mesh-0.3.2` |
+| `lora` (Reticulum + LoRa only) | `ghcr.io/pazter1101/resilum:lora-0.3.2` | `pazter1101/resilum:lora-0.3.2` |
+
+### Usage
+```bash
+docker compose --profile headless up
+```
+
 ## [0.3.1](https://github.com/PAzter1101/Resilum/compare/v0.3.0...v0.3.1) (2026-05-07)
 
 
