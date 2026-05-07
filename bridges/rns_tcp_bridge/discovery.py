@@ -1,9 +1,15 @@
-"""Generic announce / discover loop for any transport plugin.
+"""Generic discover-side machinery for transport plugins.
 
-One process per `mode: listen` bridge. Symmetric by design: the same
-loop announces the local node's endpoint and reacts to remote
-announces — no separate `announce-only` or `discover-only` modes
-exist (see project memory `feedback_resilum_p2p_symmetry`)."""
+One handler per `mode: listen` bridge. Symmetric by design: the same
+node both announces its endpoint and reacts to remote announces — no
+separate `announce-only` or `discover-only` modes exist (see project
+memory `feedback_resilum_p2p_symmetry`).
+
+The actual periodic announce is driven by listen.py's main loop, so a
+single timer + trigger covers both the bridge destination and this
+discovery destination. `start()` here registers the inbound handler
+and warm-starts from the cache, then hands the destination + plugin
+back to the caller for it to announce on its own cadence."""
 
 import threading
 import time
@@ -11,8 +17,7 @@ from typing import Optional
 
 import RNS
 
-from . import announce_trigger, cache
-from .constants import ANNOUNCE_INTERVAL_SECONDS
+from . import announce_payload, cache
 from .discovery_plugins import DiscoveryPlugin
 from .discovery_plugins import load as load_plugin
 
@@ -31,13 +36,14 @@ class _AnnounceHandler:
         self.cache_path = cache_path
 
     def received_announce(self, destination_hash, announced_identity, app_data):
-        if not app_data:
+        parsed = announce_payload.parse(app_data)
+        if parsed is None or parsed.endpoint is None:
             return
         records = cache.load(self.cache_path)
-        cache.upsert(records, app_data)
+        cache.upsert(records, parsed.endpoint)
         cache.save(self.cache_path, records)
         try:
-            self.plugin.consume_endpoint(app_data)
+            self.plugin.consume_endpoint(parsed.endpoint)
         except Exception as exc:
             RNS.log(
                 f"[discovery:{self.service}] consume failed: {exc}", RNS.LOG_WARNING
@@ -55,17 +61,17 @@ def _restore_top_n(plugin: DiscoveryPlugin, cache_path: str) -> None:
             RNS.log(f"[discovery] warm-start consume failed: {exc}", RNS.LOG_DEBUG)
 
 
-def _announce_loop(destination, plugin: DiscoveryPlugin, service: str) -> None:
-    trigger = announce_trigger.register()
-    while True:
-        try:
-            payload = plugin.produce_endpoint()
-            destination.announce(app_data=payload)
-            RNS.log(f"[discovery:{service}] announced {payload!r}", RNS.LOG_DEBUG)
-        except Exception as exc:
-            RNS.log(f"[discovery:{service}] announce skipped: {exc}", RNS.LOG_DEBUG)
-        if trigger.wait(ANNOUNCE_INTERVAL_SECONDS):
-            trigger.clear()
+def announce_once(destination, plugin: DiscoveryPlugin, service: str) -> None:
+    """Emit one discovery announce. Called from listen.py's main loop
+    so the bridge and discovery announces share a single cadence /
+    trigger."""
+    try:
+        endpoint = plugin.produce_endpoint()
+    except Exception as exc:
+        RNS.log(f"[discovery:{service}] announce skipped: {exc}", RNS.LOG_DEBUG)
+        return
+    destination.announce(app_data=announce_payload.pack(endpoint))
+    RNS.log(f"[discovery:{service}] announced {endpoint!r}", RNS.LOG_DEBUG)
 
 
 def _prune_loop(cache_path: str) -> None:
@@ -76,10 +82,14 @@ def _prune_loop(cache_path: str) -> None:
             cache.save(cache_path, records)
 
 
-def start(service: str, identity: RNS.Identity) -> Optional[DiscoveryPlugin]:
-    """Bring up the announce + discover loops for `service`. Returns
-    the loaded plugin, or None if the service has no plugin and the
-    caller should silently disable discovery."""
+def start(
+    service: str, identity: RNS.Identity
+) -> Optional[tuple[RNS.Destination, DiscoveryPlugin]]:
+    """Register the inbound announce handler and warm-start consume
+    from the on-disk cache. Returns the discovery destination + plugin
+    so the caller (listen.py main loop) can drive periodic announces,
+    or None if the service has no plugin and discovery should stay
+    disabled."""
     plugin = load_plugin(service)
     if plugin is None:
         return None
@@ -99,12 +109,6 @@ def start(service: str, identity: RNS.Identity) -> Optional[DiscoveryPlugin]:
     _restore_top_n(plugin, cache_path)
 
     threading.Thread(
-        target=_announce_loop,
-        args=(destination, plugin, service),
-        name=f"discovery-announce-{service}",
-        daemon=True,
-    ).start()
-    threading.Thread(
         target=_prune_loop,
         args=(cache_path,),
         name=f"discovery-prune-{service}",
@@ -116,4 +120,4 @@ def start(service: str, identity: RNS.Identity) -> Optional[DiscoveryPlugin]:
         f"(aspect={'.'.join(aspects)}, top_n={TOP_N_ACTIVE})",
         RNS.LOG_INFO,
     )
-    return plugin
+    return destination, plugin

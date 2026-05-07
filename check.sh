@@ -1,16 +1,11 @@
 #!/bin/bash
 set -e
 
-NO_FIX=false
 RUN_DOCKER=false
 DOCKER_PROFILE="full"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --no-fix)
-            NO_FIX=true
-            shift
-            ;;
         --docker)
             RUN_DOCKER=true
             shift
@@ -21,7 +16,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--no-fix] [--docker] [--profile lora|mesh|covert|full]"
+            echo "Usage: $0 [--docker] [--profile lora|mesh|covert|full]"
             exit 1
             ;;
     esac
@@ -69,20 +64,13 @@ source .venv-check/bin/activate
 pip install --upgrade pip > /dev/null 2>&1
 pip install flake8 black isort mypy types-PyYAML rns pyyaml pysocks > /dev/null 2>&1
 
-if [ "$NO_FIX" = true ]; then
-    echo "  → black --check --diff ${SOURCE_DIRS[*]}"
-    black --check --diff "${SOURCE_DIRS[@]}"
-    echo "  → isort --check-only --diff ${SOURCE_DIRS[*]}"
-    isort --check-only --diff "${SOURCE_DIRS[@]}"
-else
-    if ! black --check "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
-        echo "  → Fixing code formatting (black)..."
-        black "${SOURCE_DIRS[@]}"
-    fi
-    if ! isort --check-only "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
-        echo "  → Fixing import sorting (isort)..."
-        isort "${SOURCE_DIRS[@]}"
-    fi
+if ! black --check "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
+    echo "  → Fixing code formatting (black)..."
+    black "${SOURCE_DIRS[@]}"
+fi
+if ! isort --check-only "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
+    echo "  → Fixing import sorting (isort)..."
+    isort "${SOURCE_DIRS[@]}"
 fi
 
 echo "  → flake8 critical errors (E9,F63,F7,F82)..."

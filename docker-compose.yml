@@ -22,6 +22,7 @@ x-resilum-base: &resilum-base
     dockerfile: docker/Dockerfile
     args:
       PROFILE: full
+      RESILUM_VERSION: "${RESILUM_VERSION:-0.0.0}"
   pull_policy: missing
   network_mode: host
   # Run as the host user so files in the bind-mounted ./config end up
@@ -49,12 +50,12 @@ x-resilum-base: &resilum-base
     ENABLE_TOR: "1"
     ENABLE_IODINE: "0"
     # Local SOCKS5 server (microsocks) so this node can serve as a
-    # public-IP egress for other mesh peers. Symmetric by default,
-    # mirroring how Tor relays work: using the network = being part
-    # of the network. Operators who specifically don't want to be
-    # used as an exit can set ENABLE_SOCKS_EGRESS=0 (and ideally also
-    # disable the `listen socks-egress` entry in bridges.yaml).
-    ENABLE_SOCKS_EGRESS: "${ENABLE_SOCKS_EGRESS:-1}"
+    # public-IP egress for other mesh peers. Off by default — opting
+    # in means your public IP becomes the source of every peer's
+    # outbound traffic that picks you, which has legal/abuse
+    # implications. To enable, set ENABLE_SOCKS_EGRESS=1 and
+    # uncomment the `listen socks-egress` entry in bridges.yaml.
+    ENABLE_SOCKS_EGRESS: "${ENABLE_SOCKS_EGRESS:-0}"
     # Port microsocks listens on, container-internal. Bridge listen
     # entry in bridges.yaml forwards RNS Links here. Stays inside the
     # container — never exposed to the host.

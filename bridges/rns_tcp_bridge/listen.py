@@ -6,7 +6,7 @@ import threading
 
 import RNS
 
-from . import announce_trigger
+from . import announce_payload, announce_trigger
 from .constants import (
     ANNOUNCE_INTERVAL_SECONDS,
     DEFAULT_ASPECTS,
@@ -75,15 +75,17 @@ def run(args):
     # plugin → bridge runs as a plain tunnel, no announce/discover.
     from . import discovery
 
-    discovery.start(args.service, identity)
+    discovery_state = discovery.start(args.service, identity)
 
     trigger = announce_trigger.register()
     while True:
-        destination.announce()
+        destination.announce(app_data=announce_payload.pack())
         RNS.log(
             f"[bridge:listen] announced as {'.'.join(aspects)}",
             RNS.LOG_DEBUG,
         )
+        if discovery_state is not None:
+            discovery.announce_once(*discovery_state, service=args.service)
         if trigger.wait(ANNOUNCE_INTERVAL_SECONDS):
             trigger.clear()
 
