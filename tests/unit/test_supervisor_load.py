@@ -86,7 +86,52 @@ def test_default_service_when_omitted(tmp_path):
     """,
     )
     [spec] = load(path)
-    assert spec.service == "generic"
+    assert spec.services == ["generic"]
+
+
+def test_single_service_field_becomes_singleton_list(tmp_path):
+    path = write(
+        tmp_path,
+        """
+        bridges:
+          - mode: listen
+            service: tor
+            identity: /tmp/l.id
+            tcp: 127.0.0.1:9050
+    """,
+    )
+    [spec] = load(path)
+    assert spec.services == ["tor"]
+
+
+def test_services_list_preserves_priority_order(tmp_path):
+    path = write(
+        tmp_path,
+        """
+        bridges:
+          - mode: connect
+            services: [socks-egress, tor, generic]
+            identity: /tmp/c.id
+            tcp: 127.0.0.1:10808
+    """,
+    )
+    [spec] = load(path)
+    assert spec.services == ["socks-egress", "tor", "generic"]
+
+
+def test_listen_mode_rejects_multi_service(tmp_path):
+    path = write(
+        tmp_path,
+        """
+        bridges:
+          - mode: listen
+            services: [a, b]
+            identity: /tmp/l.id
+            tcp: 127.0.0.1:9000
+    """,
+    )
+    with pytest.raises(SystemExit, match="listen-mode wraps exactly one service"):
+        load(path)
 
 
 def test_env_var_expansion_with_default(tmp_path, monkeypatch):

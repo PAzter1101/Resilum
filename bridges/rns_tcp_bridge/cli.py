@@ -48,7 +48,16 @@ def _build_parser():
         "--identity", required=True, help="path to bridge's RNS identity file"
     )
     p_connect.add_argument(
-        "--service", default="generic", help="service aspect name (e.g. yggdrasil, tor)"
+        "--service",
+        action="append",
+        default=[],
+        help=(
+            "service aspect name (e.g. socks-egress, tor). May be repeated "
+            "to give a priority list — every inbound TCP connection is tried "
+            "against services in order, falling through on Link-establish "
+            "failure. If only one --service is given, behaves identically to "
+            "the previous single-target mode."
+        ),
     )
     p_connect.add_argument(
         "--tcp", required=True, help="local TCP endpoint to bind to (host:port)"
