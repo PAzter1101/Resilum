@@ -1,3 +1,27 @@
+# [0.3.0](https://github.com/PAzter1101/Resilum/compare/v0.2.0...v0.3.0) (2026-05-07)
+
+
+### Features
+
+* **bridge:** connect-mode fallback chain via services list ([5ad7717](https://github.com/PAzter1101/Resilum/commit/5ad77172f6a7347f56635720e2f194df9b6eaf9f))
+* version-aware announces, opt-in socks-egress ([2341b73](https://github.com/PAzter1101/Resilum/commit/2341b73a147a86c06a4f541082e09937f6a6523f))
+
+## Docker Images
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) published to **GitHub Container Registry** and **Docker Hub**:
+
+| Profile | GHCR | Docker Hub |
+|---|---|---|
+| `full` *(default, `latest` alias)* | `ghcr.io/pazter1101/resilum:full-0.3.0` | `pazter1101/resilum:full-0.3.0` |
+| `covert` (Tor + obfs4 + email/ICMP/DNS) | `ghcr.io/pazter1101/resilum:covert-0.3.0` | `pazter1101/resilum:covert-0.3.0` |
+| `mesh` (Yggdrasil + I2P) | `ghcr.io/pazter1101/resilum:mesh-0.3.0` | `pazter1101/resilum:mesh-0.3.0` |
+| `lora` (Reticulum + LoRa only) | `ghcr.io/pazter1101/resilum:lora-0.3.0` | `pazter1101/resilum:lora-0.3.0` |
+
+### Usage
+```bash
+docker compose --profile headless up
+```
+
 # [0.2.0](https://github.com/PAzter1101/Resilum/compare/v0.1.1...v0.2.0) (2026-05-06)
 
 
