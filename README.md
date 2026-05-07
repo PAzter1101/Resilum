@@ -80,6 +80,75 @@ When one underlay dies (clearnet blocked, peer offline, LoRa link
 lost), Reticulum reroutes through the next without dropping the
 active session.
 
+## Identities and destinations
+
+A Resilum node holds **several** Reticulum identities at once, each
+with a different role. They live as separate files under `/config/`
+and survive container restarts, so the destination hashes other
+peers learned from earlier announces stay valid:
+
+```
+                          ┌─────── Resilum node ───────┐
+                          │                            │
+                          ▼                            │
+       ┌─────────────────────────────────────┐         │
+       │ 1× network identity                 │         │
+       │ /config/reticulum/storage/          │         │
+       │   identities/resilum                │         │
+       │                                     │         │
+       │ → signs every announce that rnsd    │         │
+       │   emits for its transport           │         │
+       │   interfaces (clearnet TCP,         │         │
+       │   Yggdrasil, Tor, I2P, LoRa)        │         │
+       │ → no aspect of its own; not used    │         │
+       │   for application destinations      │         │
+       └─────────────────────────────────────┘         │
+                                                       │
+                          ┌──────── one per service ───┘
+                          ▼
+       ┌─────────────────────────────────────┐
+       │ N× bridge identities                │
+       │ /config/bridges/yggdrasil.id        │
+       │ /config/bridges/tor.id              │
+       │ /config/bridges/i2p.id              │
+       │ /config/bridges/socks-egress.id     │
+       │   (created only when egress         │
+       │    role is opted into)              │
+       │ /config/bridges/socks-egress-out.id │
+       │   (connect-side, used only to       │
+       │    skip our own announces)          │
+       │                                     │
+       │ → each yields a distinct            │
+       │   destination_hash on aspect        │
+       │   resilum.bridge.tcp.<service>      │
+       │ → each announces independently      │
+       │   every ANNOUNCE_INTERVAL_SECONDS,  │
+       │   or instantly when a new           │
+       │   underlay interface comes up       │
+       └─────────────────────────────────────┘
+
+       ┌─────────────────────────────────────┐
+       │ 2× VPN identities (when L3 VPN on)  │
+       │ /config/vpn/server.id               │
+       │ /config/vpn/client.id               │
+       │                                     │
+       │ → aspect resilum.vpn.gateway        │
+       └─────────────────────────────────────┘
+```
+
+The split matters because connect-side bridges resolve targets by
+destination hash — separate identities give peers a stable per-service
+hash to dial. If everything shared one identity, the connect-side
+fallback chain (`[socks-egress, tor, …]`) would have to track
+`identity_hash + aspect` pairs instead of plain hashes, and skip-self
+detection during auto-discovery would get tangled with which aspect
+the announce came in on.
+
+Transport interfaces themselves (TCPInterface, AutoInterface,
+LoRaInterface, our `SocksTCPClientInterface`) do **not** own
+identities — they piggyback on the network identity to sign
+announce traffic at the RNS Transport layer.
+
 ## Bundled transports
 
 | Transport | Source | Status |
