@@ -55,8 +55,7 @@ fi
 NETWORK_IDENTITY="$CONFIG_DIR/storage/identities/resilum"
 if [ ! -f "$NETWORK_IDENTITY" ]; then
     echo "[entrypoint] generating network identity at $NETWORK_IDENTITY"
-    mkdir -p "$(dirname "$NETWORK_IDENTITY")"
-    rnid -g "$NETWORK_IDENTITY" -q
+    python3 /opt/resilum/scripts/generate_network_identity.py "$NETWORK_IDENTITY"
 fi
 
 # First-run keypair generation for Yggdrasil. Failure in the helper
