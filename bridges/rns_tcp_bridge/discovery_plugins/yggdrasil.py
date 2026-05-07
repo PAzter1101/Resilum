@@ -13,6 +13,7 @@ import subprocess
 import RNS
 from RNS.Interfaces.TCPInterface import TCPClientInterface
 
+from ._transport import register_in_transport
 from .base import DiscoveryPlugin
 
 DEFAULT_RNS_PORT = 4242
@@ -47,7 +48,7 @@ class _Yggdrasil(DiscoveryPlugin):
             owner=RNS.Transport,
             configuration={"name": name, "target_host": host, "target_port": port},
         )
-        RNS.Transport.interfaces.append(iface)
+        register_in_transport(iface)
         RNS.log(f"[discovery:yggdrasil] added interface {name}", RNS.LOG_INFO)
 
 
