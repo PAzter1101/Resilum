@@ -59,29 +59,29 @@ bridges:
   #   tcp: 127.0.0.1:9001
   #   target: <paste-remote-hash-here>
 
-  # ── SOCKS-egress: symmetric public-IP exit between mesh peers.
-  # ── Each node is *both* a potential exit (the listen side, fed by
-  # ── a local `microsocks` started by the entrypoint) and a consumer
-  # ── (the connect side, exposing a SOCKS5 endpoint on
-  # ── 127.0.0.1:${RESILUM_SOCKS_PORT:-10808} for local apps).
-  # ──
-  # ── This mirrors how Tor relays work: using the network = being part
-  # ── of the network. Operators who specifically don't want their
-  # ── public IP used as an exit can disable the listen entry and set
-  # ── ENABLE_SOCKS_EGRESS=0 to skip the local microsocks.
-  # ──
-  # ── The connect side has no static `target` — it auto-discovers a
-  # ── live egress by listening for `resilum.socks-egress` announces
-  # ── from other nodes. The first heard wins.
-  - mode: listen
-    service: socks-egress
-    identity: /config/bridges/socks-egress.id
-    tcp: 127.0.0.1:${RESILUM_SOCKS_EGRESS_PORT:-1080}
-
+  # ── SOCKS-egress consumer: local apps pointing at
+  # ── 127.0.0.1:${RESILUM_SOCKS_PORT:-10808} get their traffic carried
+  # ── over RNS to a peer's egress. Fallback chain: try the public-IP
+  # ── `socks-egress` of any peer first; if no such target is currently
+  # ── known, fall back to the `tor` listen-bridge of any peer (their
+  # ── local Tor SOCKS — exit IP is a Tor exit node, not the peer's).
+  # ── `services` is tried in order on every inbound TCP connection,
+  # ── the first that yields a working RNS Link wins.
   - mode: connect
-    service: socks-egress
+    services: [socks-egress, tor]
     identity: /config/bridges/socks-egress-out.id
     tcp: 127.0.0.1:${RESILUM_SOCKS_PORT:-10808}
+
+  # ── SOCKS-egress provider (opt-in): uncomment this block AND set
+  # ── ENABLE_SOCKS_EGRESS=1 to make this node a public-IP exit for
+  # ── other mesh peers. Your IP then becomes the source of every
+  # ── peer's outbound traffic that picks you — same legal/abuse
+  # ── exposure as running a Tor exit or a public VPN.
+  # ──
+  # - mode: listen
+  #   service: socks-egress
+  #   identity: /config/bridges/socks-egress.id
+  #   tcp: 127.0.0.1:${RESILUM_SOCKS_EGRESS_PORT:-1080}
 
 # ── Layer-3 VPN over Reticulum ────────────────────────────────────────
 # A VPN tunnel routes any IP traffic (TCP, UDP, ICMP, QUIC, …) through

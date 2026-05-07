@@ -126,6 +126,14 @@ FROM profile-${PROFILE} AS final
 VOLUME ["/config"]
 ENV RNS_CONFIG_DIR=/config/reticulum
 
+# Resilum release version, baked at build time. Read at runtime by
+# bridges/rns_tcp_bridge/version.py and broadcast in every announce
+# so peers can drop us when their major doesn't match. Local builds
+# without the build-arg fall back to "0.0.0", which is interpreted
+# as "any 0.x peer is compatible".
+ARG RESILUM_VERSION=0.0.0
+ENV RESILUM_VERSION=${RESILUM_VERSION}
+
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

@@ -26,6 +26,9 @@ import time
 from dataclasses import dataclass
 
 import yaml
+from log_setup import get_logger
+
+log = get_logger("supervisor")
 
 RESTART_BACKOFF = (1, 2, 5, 15, 30, 60)
 RNS_CONFIG_DIR = os.environ.get("RNS_CONFIG_DIR", "/config/reticulum")
@@ -45,7 +48,7 @@ def _expand_env(text: str) -> str:
 @dataclass
 class _Bridge:
     mode: str
-    service: str
+    services: list[str]
     identity: str
     tcp: str
     target: str | None = None
@@ -64,16 +67,36 @@ def _parse_bridges(doc: dict) -> list:
         mode = entry.get("mode")
         if mode not in ("listen", "connect"):
             sys.exit(f"bridges[{i}].mode must be 'listen' or 'connect', got {mode!r}")
+        services = _services_of(entry)
+        if mode == "listen" and len(services) != 1:
+            sys.exit(
+                f"bridges[{i}] is listen-mode but has {len(services)} services; "
+                "listen-mode wraps exactly one service"
+            )
         out.append(
             _Bridge(
                 mode=mode,
-                service=entry.get("service", "generic"),
+                services=services,
                 identity=entry["identity"],
                 tcp=entry["tcp"],
                 target=entry.get("target"),
             )
         )
     return out
+
+
+def _services_of(entry: dict) -> list[str]:
+    """Accept either ``service: foo`` (single, legacy) or
+    ``services: [a, b]`` (priority list, connect-mode fallback chain).
+    Single service stays single-element list for symmetry."""
+    if "services" in entry:
+        services = entry["services"]
+        if not isinstance(services, list) or not services:
+            raise SystemExit(
+                f"bridges entry {entry!r} has empty or non-list `services`"
+            )
+        return [str(s) for s in services]
+    return [str(entry.get("service", "generic"))]
 
 
 def _parse_vpn(doc: dict) -> list:
@@ -104,19 +127,18 @@ def _spawn_bridge(
         spec.mode,
         "--identity",
         spec.identity,
-        "--service",
-        spec.service,
         "--tcp",
         spec.tcp,
     ]
+    for service in spec.services:
+        cmd += ["--service", service]
     if spec.target:
         cmd += ["--target", spec.target]
     if spec.mode == "connect" and not spec.target:
-        # Pass each sibling listen-bridge identity so connect's
-        # auto-discovery skips this node's own announces.
         for path in sibling_listen_identities:
             cmd += ["--skip-self-identity", path]
-    print(f"[supervisor] spawning bridge {spec.mode}/{spec.service}", flush=True)
+    label = "+".join(spec.services)
+    log.info("spawning bridge %s/%s", spec.mode, label)
     return subprocess.Popen(cmd)
 
 
@@ -133,7 +155,7 @@ def _spawn_vpn(spec: _Vpn) -> subprocess.Popen:
         spec.identity,
         *spec.extra_args,
     ]
-    print(f"[supervisor] spawning vpn/{spec.mode}", flush=True)
+    log.info("spawning vpn/%s", spec.mode)
     return subprocess.Popen(cmd)
 
 
@@ -145,13 +167,17 @@ def load(path: str) -> list:
 
 
 def _siblings_for(spec: _Bridge, all_specs: list) -> list[str]:
-    """Identity-file paths of all listen-mode bridges with the same
-    service as ``spec`` — these are the announces that ``spec`` (if it
-    is connect-mode) should treat as its own."""
+    """Identity-file paths of all listen-mode bridges whose (single)
+    service is in ``spec``'s service list — these are the announces
+    that ``spec`` (if it is connect-mode) should treat as its own and
+    skip during auto-discovery."""
+    spec_services = set(spec.services)
     return [
         s.identity
         for s in all_specs
-        if isinstance(s, _Bridge) and s.mode == "listen" and s.service == spec.service
+        if isinstance(s, _Bridge)
+        and s.mode == "listen"
+        and any(svc in spec_services for svc in s.services)
     ]
 
 
@@ -170,10 +196,11 @@ def _tick(entry, specs):
         delay = RESTART_BACKOFF[min(entry["fails"], len(RESTART_BACKOFF) - 1)]
         entry["fails"] += 1
         entry["next"] = time.time() + delay
-        print(
-            f"[supervisor] {type(entry['spec']).__name__} exited "
-            f"(rc={entry['proc'].returncode}); restart in {delay}s",
-            flush=True,
+        log.warning(
+            "%s exited (rc=%s); restart in %ds",
+            type(entry["spec"]).__name__,
+            entry["proc"].returncode,
+            delay,
         )
     elif time.time() >= entry["next"]:
         entry["proc"] = spawn(entry["spec"], specs)
@@ -186,7 +213,7 @@ def main() -> None:
     args = parser.parse_args()
     specs = load(args.config)
     if not specs:
-        print("[supervisor] nothing to run, exiting", flush=True)
+        log.info("nothing to run, exiting")
         return
 
     state = [

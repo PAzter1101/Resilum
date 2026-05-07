@@ -20,6 +20,10 @@ import os
 import sys
 import time
 
+from log_setup import get_logger
+
+log = get_logger("i2pd_export_hostname")
+
 DESTINATION_PREFIX_BYTES = 391
 KEYS_WAIT_TIMEOUT_SECONDS = 600
 KEYS_POLL_INTERVAL_SECONDS = 2
@@ -51,25 +55,22 @@ def main(keys_path: str, hostname_path: str) -> int:
     if os.path.exists(hostname_path):
         return 0
     if not wait_for_keys(keys_path, KEYS_WAIT_TIMEOUT_SECONDS):
-        print(
-            f"[i2pd_export_hostname] {keys_path} did not appear within "
-            f"{KEYS_WAIT_TIMEOUT_SECONDS}s; i2pd never published a tunnel",
-            file=sys.stderr,
+        log.error(
+            "%s did not appear within %ss; i2pd never published a tunnel",
+            keys_path,
+            KEYS_WAIT_TIMEOUT_SECONDS,
         )
         return 1
     hostname = derive_hostname(keys_path)
     os.makedirs(os.path.dirname(hostname_path), exist_ok=True)
     with open(hostname_path, "w") as fh:
         fh.write(hostname + "\n")
-    print(f"[i2pd_export_hostname] {hostname} → {hostname_path}")
+    log.info("%s → %s", hostname, hostname_path)
     return 0
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print(
-            "Usage: i2pd_export_hostname.py <keys.dat> <hostname-out>",
-            file=sys.stderr,
-        )
+        log.error("Usage: i2pd_export_hostname.py <keys.dat> <hostname-out>")
         sys.exit(2)
     sys.exit(main(sys.argv[1], sys.argv[2]))
