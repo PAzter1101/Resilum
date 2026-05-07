@@ -26,6 +26,9 @@ import time
 from dataclasses import dataclass
 
 import yaml
+from log_setup import get_logger
+
+log = get_logger("supervisor")
 
 RESTART_BACKOFF = (1, 2, 5, 15, 30, 60)
 RNS_CONFIG_DIR = os.environ.get("RNS_CONFIG_DIR", "/config/reticulum")
@@ -135,7 +138,7 @@ def _spawn_bridge(
         for path in sibling_listen_identities:
             cmd += ["--skip-self-identity", path]
     label = "+".join(spec.services)
-    print(f"[supervisor] spawning bridge {spec.mode}/{label}", flush=True)
+    log.info("spawning bridge %s/%s", spec.mode, label)
     return subprocess.Popen(cmd)
 
 
@@ -152,7 +155,7 @@ def _spawn_vpn(spec: _Vpn) -> subprocess.Popen:
         spec.identity,
         *spec.extra_args,
     ]
-    print(f"[supervisor] spawning vpn/{spec.mode}", flush=True)
+    log.info("spawning vpn/%s", spec.mode)
     return subprocess.Popen(cmd)
 
 
@@ -193,10 +196,11 @@ def _tick(entry, specs):
         delay = RESTART_BACKOFF[min(entry["fails"], len(RESTART_BACKOFF) - 1)]
         entry["fails"] += 1
         entry["next"] = time.time() + delay
-        print(
-            f"[supervisor] {type(entry['spec']).__name__} exited "
-            f"(rc={entry['proc'].returncode}); restart in {delay}s",
-            flush=True,
+        log.warning(
+            "%s exited (rc=%s); restart in %ds",
+            type(entry["spec"]).__name__,
+            entry["proc"].returncode,
+            delay,
         )
     elif time.time() >= entry["next"]:
         entry["proc"] = spawn(entry["spec"], specs)
@@ -209,7 +213,7 @@ def main() -> None:
     args = parser.parse_args()
     specs = load(args.config)
     if not specs:
-        print("[supervisor] nothing to run, exiting", flush=True)
+        log.info("nothing to run, exiting")
         return
 
     state = [

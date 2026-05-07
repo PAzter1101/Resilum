@@ -14,6 +14,10 @@ import re
 import subprocess
 import sys
 
+from log_setup import get_logger
+
+log = get_logger("yggdrasil_seed_keys")
+
 PRIVATE_KEY_RE = re.compile(r"PrivateKey:\s*([0-9a-f]+)")
 
 
@@ -44,11 +48,11 @@ def main(path):
     try:
         keys = fresh_keys()
     except (subprocess.CalledProcessError, ValueError, AttributeError) as exc:
-        print(f"[yggdrasil_seed_keys] cannot generate keys: {exc}", file=sys.stderr)
+        log.error("cannot generate keys: %s", exc)
         return 0
     with open(path, "w") as fh:
         fh.write(splice(original, keys))
-    print(f"[yggdrasil_seed_keys] keys written to {path}")
+    log.info("keys written to %s", path)
     return 0
 
 
