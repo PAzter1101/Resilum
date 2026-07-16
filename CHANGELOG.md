@@ -1,3 +1,26 @@
+# [0.4.0](https://github.com/PAzter1101/Resilum/compare/v0.3.2...v0.4.0) (2026-07-16)
+
+
+### Features
+
+* **net:** configurable public listener bind addresses + IPv6 preflight ([0529c8e](https://github.com/PAzter1101/Resilum/commit/0529c8ef858153976e40006ddfbe97883389c66e))
+
+## Docker Images
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) published to **GitHub Container Registry** and **Docker Hub**:
+
+| Profile | GHCR | Docker Hub |
+|---|---|---|
+| `full` *(default, `latest` alias)* | `ghcr.io/pazter1101/resilum:full-0.4.0` | `pazter1101/resilum:full-0.4.0` |
+| `covert` (Tor + obfs4 + email/ICMP/DNS) | `ghcr.io/pazter1101/resilum:covert-0.4.0` | `pazter1101/resilum:covert-0.4.0` |
+| `mesh` (Yggdrasil + I2P) | `ghcr.io/pazter1101/resilum:mesh-0.4.0` | `pazter1101/resilum:mesh-0.4.0` |
+| `lora` (Reticulum + LoRa only) | `ghcr.io/pazter1101/resilum:lora-0.4.0` | `pazter1101/resilum:lora-0.4.0` |
+
+### Usage
+```bash
+docker compose --profile headless up
+```
+
 ## [0.3.2](https://github.com/PAzter1101/Resilum/compare/v0.3.1...v0.3.2) (2026-05-07)
 
 
