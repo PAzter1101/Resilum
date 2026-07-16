@@ -65,6 +65,12 @@ x-resilum-base: &resilum-base
     # via shell env or .env file when 10808 conflicts with other
     # SOCKS proxies (Xray's default is also 10808).
     RESILUM_SOCKS_PORT: "${RESILUM_SOCKS_PORT:-10808}"
+    # Public listener bind addresses. Unset = the dual-stack default in the
+    # seed configs (accepts IPv4 + IPv6). Set explicit comma-separated
+    # addresses to bind specific IPs/ports (IPv6 in [brackets]); a malformed
+    # value stops the container on purpose.
+    #   RESILUM_YGG_PUBLIC_LISTEN: "tcp://203.0.113.10:65533,tcp://[2001:db8::1]:65533"
+    #   RESILUM_RNS_LISTEN: "203.0.113.10:4242,[2001:db8::1]:4242"
 
 services:
   # Run mode without LoRa hardware. Suitable for VPS, SBC bridges or just

@@ -1,3 +1,40 @@
+[project]
+name = "resilum"
+version = "0.0.0"
+requires-python = ">=3.11"
+# Base runtime — Reticulum stack, present in every image profile.
+dependencies = [
+    "rns==1.3.8",
+    "lxmf==1.0.1",
+    "PyYAML==6.0.3",
+]
+
+[dependency-groups]
+# Covert profile — SOCKS + ICMP/covert transports on top of base.
+covert = [
+    "scapy==2.7.0",
+    "rns-covert-transport==0.1.3",
+    "PySocks==1.7.1",
+]
+# Full profile — Meshtastic gateway on top of covert.
+full = [
+    { include-group = "covert" },
+    "meshtastic==2.7.10",
+]
+# Dev / CI toolchain on top of the covert runtime.
+dev = [
+    { include-group = "covert" },
+    "black==26.5.1",
+    "flake8==7.3.0",
+    "isort==8.0.1",
+    "mypy==2.3.0",
+    "types-PyYAML==6.0.12.20260518",
+    "pytest==9.1.1",
+]
+
+[tool.uv]
+package = false
+
 [tool.black]
 line-length = 88
 target-version = ["py312"]
@@ -6,7 +43,7 @@ target-version = ["py312"]
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["rns_tcp_bridge", "vpn", "supervisor", "yggdrasil_seed_keys"]
+known_first_party = ["bind_config", "rns_tcp_bridge", "vpn", "supervisor", "yggdrasil_seed_keys"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -15,6 +52,9 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
 ignore_missing_imports = true
+
+[tool.pyright]
+extraPaths = ["bridges"]
 
 [tool.pytest.ini_options]
 filterwarnings = ["error"]
