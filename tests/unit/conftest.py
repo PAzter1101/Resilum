@@ -1,0 +1,9 @@
+"""Put this dir on sys.path so unit tests can import shared helpers
+(bind_samples), mirroring how the root conftest exposes bridges/."""
+
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Resilum — multi-transport mesh node
 #
 # Single Dockerfile, four profile supersets selected via the PROFILE
@@ -49,7 +50,13 @@ RUN groupadd -g 1000 resilum && \
 # `--break-system-packages` is required on Debian 12+ to install into the
 # system Python; we deliberately avoid a venv to keep image size minimal
 # and the entrypoint trivial.
-RUN pip install --no-cache-dir --break-system-packages --ignore-installed rns lxmf pyyaml
+RUN --mount=from=ghcr.io/astral-sh/uv:0.9.5,source=/uv,target=/usr/local/bin/uv \
+    --mount=type=bind,source=pyproject.toml,target=/tmp/dep/pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=/tmp/dep/uv.lock \
+    uv export --directory /tmp/dep --frozen --no-default-groups --no-emit-project \
+        --format requirements-txt \
+    | pip install --no-cache-dir --break-system-packages --ignore-installed \
+        --require-hashes -r /dev/stdin
 
 # ─── lora ───────────────────────────────────────────────────────────────────
 # Minimum viable Reticulum node: native interfaces (TCP/UDP/AutoInterface)
@@ -104,17 +111,26 @@ RUN apt-get update && \
 # scapy) is deliberately deferred to the final stage — applying setcap
 # here puts Python into secure-execution mode and breaks subsequent
 # `pip install` invocations in higher-superset profiles (e.g. `full`).
-RUN pip install --no-cache-dir --break-system-packages --ignore-installed \
-        scapy \
-        rns-covert-transport \
-        pysocks
+RUN --mount=from=ghcr.io/astral-sh/uv:0.9.5,source=/uv,target=/usr/local/bin/uv \
+    --mount=type=bind,source=pyproject.toml,target=/tmp/dep/pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=/tmp/dep/uv.lock \
+    uv export --directory /tmp/dep --frozen --no-default-groups --group covert \
+        --no-emit-project --format requirements-txt \
+    | pip install --no-cache-dir --break-system-packages --ignore-installed \
+        --require-hashes -r /dev/stdin
 
 # ─── full ───────────────────────────────────────────────────────────────────
 # Everything plus the Meshtastic gateway. Pulls the largest dependency set
 # (the meshtastic Python lib has heavy transitive deps).
 FROM profile-covert AS profile-full
 
-RUN pip install --no-cache-dir --break-system-packages --ignore-installed meshtastic
+RUN --mount=from=ghcr.io/astral-sh/uv:0.9.5,source=/uv,target=/usr/local/bin/uv \
+    --mount=type=bind,source=pyproject.toml,target=/tmp/dep/pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=/tmp/dep/uv.lock \
+    uv export --directory /tmp/dep --frozen --no-default-groups --group full \
+        --no-emit-project --format requirements-txt \
+    | pip install --no-cache-dir --break-system-packages --ignore-installed \
+        --require-hashes -r /dev/stdin
 
 # ─── final ──────────────────────────────────────────────────────────────────
 # Selects which of the four supersets is the final image based on the

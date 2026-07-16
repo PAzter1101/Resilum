@@ -62,7 +62,8 @@ fi
 # shellcheck source=/dev/null
 source .venv-check/bin/activate
 pip install --upgrade pip > /dev/null 2>&1
-pip install flake8 black isort mypy types-PyYAML rns pyyaml pysocks > /dev/null 2>&1
+uv export --no-default-groups --group dev --no-emit-project --format requirements-txt 2>/dev/null \
+    | pip install --require-hashes -r /dev/stdin > /dev/null 2>&1
 
 if ! black --check "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
     echo "  → Fixing code formatting (black)..."
@@ -101,7 +102,6 @@ echo "🧪 Step 3: Unit Tests"
 echo "---------------------"
 # shellcheck source=/dev/null
 source .venv-check/bin/activate
-pip install pytest > /dev/null 2>&1
 pytest tests/unit -v
 deactivate
 

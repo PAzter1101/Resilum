@@ -282,6 +282,36 @@ required for the current SOCKS-mode runtime. Future L3-VPN mode
 will additionally need `/dev/net/tun` and `cap_add: NET_ADMIN`,
 both already wired in the supplied compose file.
 
+### Public bind address
+
+Two listeners accept traffic from outside the host: the Yggdrasil peer
+port (`65533`) and the Reticulum TCP listener (`4242`). Both default to a
+dual-stack wildcard (`[::]` / `::`) — they accept IPv4 and IPv6, which is
+the right default for a node behind NAT or with one public IP.
+
+To bind explicit addresses (a multi-IP VPS, or to keep a listener off a
+management interface), set:
+
+- `RESILUM_YGG_PUBLIC_LISTEN` — comma-separated `tcp://`/`tls://` URIs,
+  IPv6 in brackets, e.g. `tcp://203.0.113.10:65533,tcp://[2001:db8::1]:65533`
+- `RESILUM_RNS_LISTEN` — comma-separated `host:port`, IPv6 in brackets,
+  e.g. `203.0.113.10:4242,[2001:db8::1]:4242`. Each entry becomes its own
+  listener; the first is the discoverable one.
+
+A malformed value stops the container on purpose, rather than silently
+binding somewhere you did not intend.
+
+The loopback service ports (Tor/i2pd SOCKS, the bridge endpoints, the
+SOCKS egress) stay on `127.0.0.1` and are not configurable — exposing them
+would be a security hole. Tor/i2p reachability comes from those overlays
+(`.onion` / `.b32.i2p`), not from binding host interfaces.
+
+Nodes whose `/config` was written before this feature have no managed
+region, so the env vars are ignored (a warning is logged). To adopt it,
+replace `tcp://0.0.0.0:65533` with `tcp://[::]:65533` in
+`config/yggdrasil.conf`, or re-add the `# >>> resilum:managed …` markers
+around the public listener and set the env var.
+
 ## Building from source
 
 For development or when iterating on the Dockerfile / a transport.
