@@ -23,8 +23,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install flake8 black isort mypy types-PyYAML pytest rns pyyaml pysocks
+        python -m pip install --upgrade pip uv
+        uv export --no-default-groups --group dev --no-emit-project --format requirements-txt \
+          | pip install --require-hashes -r /dev/stdin
 
     - name: Check code formatting with Black
       run: black --check --diff bridges/ scripts/ tests/
