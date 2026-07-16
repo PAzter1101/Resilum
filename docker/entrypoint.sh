@@ -65,6 +65,12 @@ if command -v yggdrasil >/dev/null 2>&1; then
     python3 /opt/resilum/scripts/yggdrasil_seed_keys.py /config/yggdrasil.conf || true
 fi
 
+# Render public-listener bind regions from RESILUM_YGG_PUBLIC_LISTEN /
+# RESILUM_RNS_LISTEN. No `|| true`: a malformed value must stop startup
+# rather than silently bind somewhere the operator did not intend.
+python3 /opt/resilum/scripts/render_bind_config.py \
+    /config/yggdrasil.conf "$CONFIG_DIR/config"
+
 # Helper: launch a daemon in the background only if its binary is present
 # in the image (i.e. its profile bundled it) AND the user opted into it
 # via an environment flag. Each ENABLE_* flag defaults to "0".
@@ -80,6 +86,24 @@ run_if_enabled() {
         echo "[entrypoint] WARNING: $flag=1 but $binary is not in this image profile"
     fi
 }
+
+# Yggdrasil assigns an IPv6 address to ygg0; if the host has IPv6 disabled
+# the kernel rejects that with EACCES and yggdrasil dies on a cryptic
+# "failed to add address to link: permission denied" panic. Detect it and
+# skip with an actionable message instead.
+ipv6_unavailable() {
+    d=/proc/sys/net/ipv6/conf
+    [ ! -e "$d/all/disable_ipv6" ] ||
+        [ "$(cat "$d/all/disable_ipv6" 2>/dev/null)" = "1" ] ||
+        [ "$(cat "$d/default/disable_ipv6" 2>/dev/null)" = "1" ]
+}
+
+if [ "$(printenv ENABLE_YGGDRASIL || echo 0)" = "1" ] &&
+    command -v yggdrasil >/dev/null 2>&1 && ipv6_unavailable; then
+    echo "[entrypoint] WARNING: host IPv6 is disabled; Yggdrasil needs it for ygg0 and will not be started."
+    echo "[entrypoint]          fix: sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0 net.ipv6.conf.default.disable_ipv6=0"
+    export ENABLE_YGGDRASIL=0
+fi
 
 run_if_enabled ENABLE_YGGDRASIL    yggdrasil   -useconffile /config/yggdrasil.conf
 run_if_enabled ENABLE_I2PD         i2pd        --datadir=/config/i2p --conf=/config/i2pd.conf
