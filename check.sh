@@ -69,16 +69,9 @@ if ! black --check "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
     echo "  → Fixing code formatting (black)..."
     black "${SOURCE_DIRS[@]}"
 fi
-if ! isort --check-only "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
-    echo "  → Fixing import sorting (isort)..."
-    isort "${SOURCE_DIRS[@]}"
-fi
 
-echo "  → flake8 critical errors (E9,F63,F7,F82)..."
-flake8 "${LINT_DIRS[@]}" --count --select=E9,F63,F7,F82 --show-source --statistics
-
-echo "  → flake8 style..."
-flake8 "${LINT_DIRS[@]}" --count --max-complexity=10 --max-line-length=88 --statistics
+echo "  → ruff (lint, import order, in-function imports; autofixes what it can)..."
+ruff check --fix "${SOURCE_DIRS[@]}"
 
 echo "  → mypy..."
 mypy --ignore-missing-imports "${LINT_DIRS[@]}"

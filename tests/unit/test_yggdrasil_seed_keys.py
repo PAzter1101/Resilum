@@ -7,7 +7,6 @@ left alone.
 
 import importlib.util
 import os
-import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SPEC = importlib.util.spec_from_file_location(
