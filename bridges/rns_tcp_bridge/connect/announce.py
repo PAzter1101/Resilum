@@ -1,9 +1,4 @@
-"""Connect-side announce handlers.
-
-Each service in the fallback chain registers a persistent handler
-that updates the shared ``targets`` dict on every fresh announce —
-and tears down the live Link to a peer that becomes incompatible (or
-otherwise stops parsing) so the pump notices and frees its TCP half."""
+"""Connect-side announce handlers backed by CandidateRegistry."""
 
 import RNS
 
@@ -14,10 +9,8 @@ from .link_registry import _teardown_links_for
 
 
 def _hash_from_identity_file(identity_path: str, aspects: list) -> bytes | None:
-    """Return the destination hash that a listen-bridge with the given
-    identity file would announce on the given aspects, without
-    registering anything with Transport. Used by the connect-bridge to
-    skip its own listen-bridge during auto-discovery."""
+    """Return the destination hash for a given identity + aspects, without
+    registering with Transport. Used to compute skip-self hashes."""
     try:
         identity = load_or_create_identity(identity_path)
     except Exception as exc:
@@ -34,12 +27,9 @@ def _hash_from_identity_file(identity_path: str, aspects: list) -> bytes | None:
     return h
 
 
-def _make_announce_handler(
-    service: str, aspects: list, skip_hashes: set, targets: dict, lock
-):
-    """Persistent announce handler — stays registered for the bridge's
-    whole lifetime, refreshing the target hash each time the service's
-    listen-side re-announces (or a fresh peer joins)."""
+def _make_registry_handler(service, aspects, skip_hashes, registry):
+    """Announce handler that upserts discovered peers into CandidateRegistry,
+    skips own hashes, and removes peers whose announce stops parsing."""
     aspect_filter = ".".join(aspects)
 
     class _Handler:
@@ -50,28 +40,18 @@ def _make_announce_handler(
         def received_announce(self, destination_hash, announced_identity, app_data):
             del announced_identity
             if destination_hash in skip_hashes:
-                RNS.log(
-                    f"[bridge:connect/{service}] ignoring self-announce "
-                    f"{RNS.prettyhexrep(destination_hash)}",
-                    RNS.LOG_DEBUG,
-                )
                 return
-            if announce_payload.parse(app_data) is None:
-                _teardown_links_for(
-                    destination_hash, reason="incompatible or malformed announce"
-                )
-                with lock:
-                    targets.pop(service, None)
+            parsed = announce_payload.parse(app_data)
+            if parsed is None:
+                _teardown_links_for(destination_hash, reason="incompatible announce")
+                registry.remove(service, destination_hash)
                 return
-            with lock:
-                previous = targets.get(service)
-                targets[service] = destination_hash
-            if previous != destination_hash:
-                RNS.log(
-                    f"[bridge:connect/{service}] target now "
-                    f"{RNS.prettyhexrep(destination_hash)}",
-                    RNS.LOG_INFO,
-                )
+            registry.upsert(
+                service,
+                destination_hash,
+                exit_country=parsed.exit_country,
+                capabilities=parsed.capabilities,
+            )
 
     return _Handler()
 
