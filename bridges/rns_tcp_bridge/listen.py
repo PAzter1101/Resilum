@@ -6,7 +6,7 @@ import threading
 
 import RNS
 
-from . import announce_payload, announce_trigger
+from . import announce_payload, announce_trigger, discovery
 from .constants import (
     ANNOUNCE_INTERVAL_SECONDS,
     DEFAULT_ASPECTS,
@@ -73,13 +73,15 @@ def run(args):
     # announces this node's transport endpoint and consumes others'
     # announcements, if a plugin for the service exists. Missing
     # plugin → bridge runs as a plain tunnel, no announce/discover.
-    from . import discovery
-
     discovery_state = discovery.start(args.service, identity)
 
     trigger = announce_trigger.register()
     while True:
-        destination.announce(app_data=announce_payload.pack())
+        destination.announce(
+            app_data=announce_payload.pack(
+                exit_country=getattr(args, "exit_country", "*"),
+            )
+        )
         RNS.log(
             f"[bridge:listen] announced as {'.'.join(aspects)}",
             RNS.LOG_DEBUG,

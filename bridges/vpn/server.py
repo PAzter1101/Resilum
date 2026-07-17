@@ -13,6 +13,9 @@ import threading
 import time
 
 import RNS
+from RNS.Buffer import RawChannelWriter
+
+from rns_tcp_bridge.identity import load_or_create_identity
 
 from . import framing, pump, tun
 
@@ -92,8 +95,6 @@ def _serve_link(
     # Single-line handshake: "VPN/1 <client-ip> <server-ip> <prefix>\n"
     handshake = f"VPN/1 {client_ip} {allocator.server_ip} {subnet.prefixlen}\n".encode()
     channel = link.get_channel()
-    from RNS.Buffer import RawChannelWriter
-
     RawChannelWriter(0, channel).write(framing.encode(handshake))
 
     closed = pump.wire(link, server_fd, label=f"server[{client_ip}]")
@@ -114,8 +115,6 @@ def run(args) -> None:
     fd = tun.open_tun(args.tun)
     tun.configure(args.tun, alloc.server_ip, subnet.prefixlen, args.mtu)
     _enable_forwarding(args.uplink, str(subnet))
-
-    from rns_tcp_bridge.identity import load_or_create_identity
 
     identity = load_or_create_identity(args.identity)
 

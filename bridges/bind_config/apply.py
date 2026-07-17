@@ -2,9 +2,8 @@
 
 import os
 
-from log_setup import get_logger
-
 from bind_config.render import render_rns, render_ygg
+from log_setup import get_logger
 
 log = get_logger("render_bind_config")
 

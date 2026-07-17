@@ -1,10 +1,6 @@
-"""Outbound dispatcher: take an accepted client TCP socket and try
-each service in priority order until one yields a working RNS Link
-to a peer's listen-bridge.
-
-The first service that produces an active Link wins; the pump is
-wired and the loop returns. If every service in the chain fails, the
-socket is closed."""
+"""Outbound dispatcher: open a Link to a chosen egress Candidate and
+wire the TCP pump. The caller (connect.run) pre-selects the candidate
+via the registry/selector before calling dispatch_to."""
 
 import time
 
@@ -78,37 +74,10 @@ def _try_one_service(sock, service: str, target_hash: bytes, aspects: list) -> b
     return True
 
 
-def _handle_outbound(sock, services: list, targets, lock):
-    """Try each service in priority order. On the first one that yields
-    a working Link, hand the socket off to the pump and return. If all
-    services fail, close the socket."""
-    for service in services:
-        with lock:
-            target_hash = targets.get(service)
-        if target_hash is None:
-            RNS.log(
-                f"[bridge:connect/{service}] no target known yet, skipping",
-                RNS.LOG_DEBUG,
-            )
-            continue
-        aspects = DEFAULT_ASPECTS + [service]
-        if _try_one_service(sock, service, target_hash, aspects):
-            return
-    RNS.log(
-        "[bridge:connect] no service in fallback chain yielded a Link, "
-        "dropping TCP connection",
-        RNS.LOG_WARNING,
-    )
-    sock.close()
+def dispatch_to(sock, candidate) -> bool:
+    """Open a Link to the chosen candidate and wire the pump.
 
-
-def _wait_for_any_target(targets, lock, services, timeout):
-    """Block until at least one of ``services`` has a target hash in the
-    shared dict, or ``timeout`` elapses."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        with lock:
-            if any(targets.get(s) is not None for s in services):
-                return True
-        time.sleep(0.5)
-    return False
+    Returns True on success; on failure the caller is responsible for
+    closing the socket."""
+    aspects = DEFAULT_ASPECTS + [candidate.service]
+    return _try_one_service(sock, candidate.service, candidate.dest_hash, aspects)

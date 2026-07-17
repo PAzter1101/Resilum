@@ -61,14 +61,24 @@ bridges:
 
   # ── SOCKS-egress consumer: local apps pointing at
   # ── 127.0.0.1:${RESILUM_SOCKS_PORT:-10808} get their traffic carried
-  # ── over RNS to a peer's egress. Fallback chain: try the public-IP
-  # ── `socks-egress` of any peer first; if no such target is currently
-  # ── known, fall back to the `tor` listen-bridge of any peer (their
-  # ── local Tor SOCKS — exit IP is a Tor exit node, not the peer's).
-  # ── `services` is tried in order on every inbound TCP connection,
-  # ── the first that yields a working RNS Link wins.
+  # ── over RNS to the fastest eligible peer egress (measured by combined
+  # ── mesh + egress latency). Fallback order when no faster candidate is
+  # ── known: socks-egress (public-IP exit) → tor (via Tor exit nodes).
   - mode: connect
     services: [socks-egress, tor]
+    # Egress picking: fastest eligible provider by measured latency, with failover.
+    # use_own: smart (default) | true | false. smart = use own tor/i2p (fast, private)
+    #   but never your own socks-egress (would expose your real IP).
+    use_own: smart
+    # Exit-country policy (ISO codes). Empty = unrestricted. A provider whose exit
+    # country is unknown ("*", e.g. unpinned Tor) is excluded when either list is set.
+    allow_countries: []
+    deny_countries: []
+    # Latency-probe targets (IPv4:port) reached through each egress to measure
+    # its speed. Precedence: this list → env RESILUM_EGRESS_PROBE_TARGETS →
+    # built-in defaults (1.1.1.1/8.8.8.8/9.9.9.9:443). Override if these are
+    # unreachable from your egress location.
+    # probe_targets: [1.1.1.1:443, 9.9.9.9:443]
     identity: /config/bridges/socks-egress-out.id
     tcp: 127.0.0.1:${RESILUM_SOCKS_PORT:-10808}
 
@@ -82,6 +92,8 @@ bridges:
   #   service: socks-egress
   #   identity: /config/bridges/socks-egress.id
   #   tcp: 127.0.0.1:${RESILUM_SOCKS_EGRESS_PORT:-1080}
+  #   # exit_country: DE   # ISO code of THIS node's public-IP country, announced to
+  #   #                    # consumers for country filtering. Omit = "*" (unknown).
 
 # ── Layer-3 VPN over Reticulum ────────────────────────────────────────
 # A VPN tunnel routes any IP traffic (TCP, UDP, ICMP, QUIC, …) through

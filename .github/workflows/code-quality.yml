@@ -30,13 +30,8 @@ jobs:
     - name: Check code formatting with Black
       run: black --check --diff bridges/ scripts/ tests/
 
-    - name: Check import sorting with isort
-      run: isort --check-only --diff bridges/ scripts/ tests/
-
-    - name: Lint with flake8
-      run: |
-        flake8 bridges/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 bridges/ scripts/ --count --max-complexity=10 --max-line-length=88 --statistics
+    - name: Lint with Ruff
+      run: ruff check bridges/ scripts/ tests/
 
     - name: Type check with mypy
       run: mypy --ignore-missing-imports bridges/ scripts/

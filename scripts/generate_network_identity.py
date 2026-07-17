@@ -16,6 +16,7 @@ import os
 import sys
 
 import RNS
+
 from log_setup import get_logger
 
 log = get_logger("generate_network_identity")

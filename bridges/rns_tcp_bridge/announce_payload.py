@@ -28,12 +28,22 @@ from .version import VERSION, is_compatible
 class ParsedAnnounce:
     version: str
     endpoint: Optional[bytes]
+    exit_country: str = "*"
+    capabilities: tuple = ()
 
 
-def pack(endpoint: Optional[bytes] = None) -> bytes:
+def pack(
+    endpoint: Optional[bytes] = None,
+    exit_country: str = "*",
+    capabilities: tuple = (),
+) -> bytes:
     payload: dict = {"v": VERSION}
     if endpoint is not None:
         payload["ep"] = endpoint.decode("utf-8")
+    if exit_country and exit_country != "*":
+        payload["co"] = exit_country
+    if capabilities:
+        payload["cap"] = list(capabilities)
     return json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
 
@@ -64,4 +74,15 @@ def parse(raw: Optional[bytes]) -> Optional[ParsedAnnounce]:
         return None
     endpoint_str = decoded.get("ep")
     endpoint = endpoint_str.encode("utf-8") if isinstance(endpoint_str, str) else None
-    return ParsedAnnounce(version=peer_version, endpoint=endpoint)
+    country = decoded.get("co")
+    exit_country = country if isinstance(country, str) and country else "*"
+    caps = decoded.get("cap")
+    capabilities = (
+        tuple(c for c in caps if isinstance(c, str)) if isinstance(caps, list) else ()
+    )
+    return ParsedAnnounce(
+        version=peer_version,
+        endpoint=endpoint,
+        exit_country=exit_country,
+        capabilities=capabilities,
+    )

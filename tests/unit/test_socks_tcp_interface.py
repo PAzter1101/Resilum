@@ -13,6 +13,8 @@ if "RNS" not in sys.modules:
 if "socks" not in sys.modules:
     pytest.importorskip("socks", reason="PySocks not installed")
 
+from RNS.Interfaces.Interface import Interface
+
 from socks_tcp_interface import SocksTCPClientInterface
 
 
@@ -23,8 +25,6 @@ def patched_parent():
     target = "RNS.Interfaces.TCPInterface.TCPClientInterface.__init__"
 
     def stub(self, owner, configuration, connected_socket=None):
-        from RNS.Interfaces.Interface import Interface
-
         c = Interface.get_config_obj(configuration)
         self.target_ip = c.get("target_host")
         self.target_port = int(c["target_port"])

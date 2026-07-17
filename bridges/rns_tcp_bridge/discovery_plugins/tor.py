@@ -13,6 +13,7 @@ Tor SOCKS5 proxy (127.0.0.1:9050).
 import re
 
 import RNS
+
 from socks_tcp_interface import SocksTCPClientInterface
 
 from ._transport import register_in_transport
