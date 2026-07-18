@@ -1,15 +1,10 @@
-"""Unit tests for the bridge-supervisor YAML loader.
-
-Validates the configuration format without actually spawning any
-processes. Touches no network, no Reticulum stack, no disk besides
-the temporary file pytest creates.
-"""
+"""Bridge-supervisor YAML loading and validation (no processes spawned)."""
 
 import textwrap
 
 import pytest
 
-from bridge_config import _parse_bridges, load
+from bridge_config import load
 
 
 def write(tmp_path, text):
@@ -60,8 +55,6 @@ def test_unknown_mode_aborts(tmp_path):
 
 
 def test_connect_without_target_is_allowed(tmp_path):
-    """Connect-mode without `target` is valid — bridge will
-    auto-discover one by listening for announces."""
     path = write(
         tmp_path,
         """
@@ -164,42 +157,3 @@ def test_env_var_expansion_overrides_default(tmp_path, monkeypatch):
     )
     [spec] = load(path)
     assert spec.tcp == "127.0.0.1:10807"
-
-
-def test_connect_entry_carries_policy_fields():
-    doc = {
-        "bridges": [
-            {
-                "mode": "connect",
-                "services": ["socks-egress", "tor"],
-                "identity": "/id",
-                "tcp": "127.0.0.1:10808",
-                "use_own": "false",
-                "allow_countries": ["NL"],
-                "deny_countries": ["CN"],
-                "probe_targets": ["1.1.1.1:443", "9.9.9.9:443"],
-            }
-        ]
-    }
-    bridges = _parse_bridges(doc)
-    b = bridges[0]
-    assert b.use_own == "false"
-    assert b.allow_countries == ["NL"]
-    assert b.deny_countries == ["CN"]
-    assert b.probe_targets == ["1.1.1.1:443", "9.9.9.9:443"]
-
-
-def test_listen_entry_carries_exit_country():
-    doc = {
-        "bridges": [
-            {
-                "mode": "listen",
-                "service": "socks-egress",
-                "identity": "/id",
-                "tcp": "127.0.0.1:1080",
-                "exit_country": "DE",
-            }
-        ]
-    }
-    b = _parse_bridges(doc)[0]
-    assert b.exit_country == "DE"

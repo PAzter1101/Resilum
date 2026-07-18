@@ -132,3 +132,15 @@ bridges:
 #     # No `target` here — the client discovers anchors automatically
 #     # by listening for RNS announces on `resilum.vpn.gateway`.
 #     mtu: 1280
+
+# ── Covert transports: carry RNS over ICMP where that gets through a filtered
+# ── network. Discovery announces this node's endpoint and dials peers back
+# ── automatically. role: both | client | server. Being a server means peers
+# ── reach you at `address` — any IP they can ping, public or on a shared LAN
+# ── (set RESILUM_COVERT_ADDR); a node without one runs client-only. Needs the
+# ── `covert` build profile (scapy).
+covert:
+  - carrier: icmp
+    role: both
+    address: ${RESILUM_COVERT_ADDR:-}
+    identity: /config/covert/server.id

@@ -10,7 +10,6 @@ upstream license:
 
   * Reticulum Network Stack          MIT
   * rns-covert-transport (TechVoid)  Apache-2.0
-  * rns-over-icmp (matvik22000)      (no declared license — used as-is)
   * iodine                           ISC
   * i2pd                             BSD-3-Clause
   * Tor + obfs4proxy                 BSD

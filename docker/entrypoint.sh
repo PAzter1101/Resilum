@@ -152,7 +152,7 @@ done
 # /config/bridges.yaml. Now safe to start — rnsd already owns the
 # shared instance, supervisor's RNS() call will join as a client.
 if [ -f /config/bridges.yaml ]; then
-    mkdir -p /config/bridges
+    mkdir -p /config/bridges /config/covert
     echo "[entrypoint] starting bridge supervisor"
     python3 -u -m supervisor /config/bridges.yaml &
 fi

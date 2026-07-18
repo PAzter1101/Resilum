@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-from bridge_config import _Bridge, _siblings_for, _Vpn
+from bridge_config import _Bridge, _Covert, _siblings_for, _Vpn
 from log_setup import get_logger
 
 log = get_logger("supervisor")
@@ -68,9 +68,29 @@ def _spawn_vpn(spec: _Vpn) -> subprocess.Popen:
     return subprocess.Popen(cmd)
 
 
+def _spawn_covert(spec: _Covert) -> subprocess.Popen:
+    cmd = [
+        sys.executable,
+        "-u",
+        "-m",
+        "covert.discovery",
+        spec.carrier,
+        "--identity",
+        spec.identity,
+        "--config",
+        RNS_CONFIG_DIR,
+    ]
+    if spec.address and spec.role in ("server", "both"):
+        cmd += ["--address", spec.address]
+    log.info("spawning covert/%s", spec.carrier)
+    return subprocess.Popen(cmd)
+
+
 def spawn(spec, all_specs: list) -> subprocess.Popen:
     if isinstance(spec, _Bridge):
         return _spawn_bridge(spec, _siblings_for(spec, all_specs))
     if isinstance(spec, _Vpn):
         return _spawn_vpn(spec)
+    if isinstance(spec, _Covert):
+        return _spawn_covert(spec)
     raise TypeError(f"unknown spec type {type(spec).__name__}")

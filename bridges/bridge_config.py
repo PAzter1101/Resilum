@@ -45,6 +45,14 @@ class _Vpn:
     extra_args: list[str]
 
 
+@dataclass
+class _Covert:
+    carrier: str
+    role: str = "both"
+    address: str = ""
+    identity: str = ""
+
+
 def _services_of(entry: dict) -> list[str]:
     """Accept either ``service: foo`` (single, legacy) or
     ``services: [a, b]`` (priority list, connect-mode fallback chain).
@@ -103,11 +111,28 @@ def _parse_vpn(doc: dict) -> list:
     return out
 
 
+def _parse_covert(doc: dict) -> list:
+    out = []
+    for i, entry in enumerate(doc.get("covert", [])):
+        carrier = entry.get("carrier")
+        if not carrier:
+            sys.exit(f"covert[{i}] missing carrier")
+        out.append(
+            _Covert(
+                carrier=str(carrier),
+                role=str(entry.get("role", "both")),
+                address=str(entry.get("address", "")),
+                identity=str(entry.get("identity", "")),
+            )
+        )
+    return out
+
+
 def load(path: str) -> list:
     with open(path) as fh:
         raw = fh.read()
     doc = yaml.safe_load(_expand_env(raw)) or {}
-    return _parse_bridges(doc) + _parse_vpn(doc)
+    return _parse_bridges(doc) + _parse_vpn(doc) + _parse_covert(doc)
 
 
 def _siblings_for(spec: _Bridge, all_specs: list) -> list[str]:
