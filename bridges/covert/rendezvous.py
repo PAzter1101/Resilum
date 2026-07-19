@@ -13,6 +13,17 @@ ENDPOINT_PATH = "endpoint"
 _LINK_TIMEOUT = 15.0
 
 
+def endpoint_responder(endpoint: bytes):
+    """Serve a fixed endpoint blob. RNS dispatches request handlers by parameter
+    count (5 or 6) and rejects any other signature, so this needs five explicit
+    params rather than *args."""
+
+    def _respond(path, data, request_id, remote_identity, requested_at):
+        return endpoint
+
+    return _respond
+
+
 def request_endpoint(announced_identity, carrier: str):
     """Open a link to the announced covert-discovery destination, request its
     endpoint, and return the address CSV (or None on failure/timeout)."""

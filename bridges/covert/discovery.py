@@ -126,7 +126,7 @@ def run(
     endpoint = pack_endpoint(carrier, ",".join(addrs))
     dest.register_request_handler(
         rendezvous.ENDPOINT_PATH,
-        response_generator=lambda *_a: endpoint,
+        response_generator=rendezvous.endpoint_responder(endpoint),
         allow=RNS.Destination.ALLOW_ALL,
     )
     capability = announce_payload.pack(pack_endpoint(carrier, ""))
