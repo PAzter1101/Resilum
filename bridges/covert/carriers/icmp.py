@@ -1,12 +1,15 @@
 """ICMP-echo carrier over standard-library sockets. Sending uses a raw socket
-and the kernel adds the IP header. Receiving uses AF_PACKET, which taps below
-netfilter — so the covert server still sees a request even though nftguard drops
-the kernel's duplicate echo-reply for it. Locally-originated frames are skipped
-by packet type, so a node never re-ingests its own echoes."""
+and the kernel adds the IP header. Receiving uses AF_PACKET with a kernel cBPF
+filter (ICMP only), which taps below netfilter — so the covert server still sees
+a request even though nftguard drops the kernel's duplicate echo-reply for it.
+Locally-originated frames are skipped by packet type, so a node never re-ingests
+its own echoes."""
 
+import ctypes
 import ipaddress
 import select
 import socket
+import struct
 
 from . import _icmp_wire as wire
 from .base import Carrier
@@ -15,6 +18,21 @@ DEFAULT_MTU = 1400
 _IPV4_OVERHEAD = 20 + 8  # IP + ICMP echo headers
 _IPV6_OVERHEAD = 40 + 8  # IPv6 + ICMPv6 echo headers
 _PACKET_OUTGOING = 4
+_SO_ATTACH_FILTER = 26
+# cBPF matching only ICMP/ICMPv6, so the kernel wakes us only for those instead
+# of every IP packet. On an AF_PACKET SOCK_DGRAM socket the filter sees the L3
+# packet: the IPv4 protocol is at byte 9, the IPv6 next-header at byte 6.
+_ICMP_AT = {wire.ETH_P_IP: (9, 1), wire.ETH_P_IPV6: (6, 58)}
+
+
+def _icmp_bpf(offset: int, value: int) -> tuple[bytes, int]:
+    prog = [
+        (0x30, 0, 0, offset),  # ldb [offset]
+        (0x15, 0, 1, value),  # jeq value ? accept : reject
+        (0x06, 0, 0, 0x0000FFFF),  # ret 0xffff (accept)
+        (0x06, 0, 0, 0x00000000),  # ret 0 (reject)
+    ]
+    return b"".join(struct.pack("HBBI", *ins) for ins in prog), len(prog)
 
 
 class IcmpCarrier(Carrier):
@@ -75,6 +93,13 @@ class IcmpCarrier(Carrier):
 
     def _capture(self, ethertype: int) -> socket.socket:
         s = socket.socket(socket.AF_PACKET, socket.SOCK_DGRAM, socket.htons(ethertype))
+        bpf, count = _icmp_bpf(*_ICMP_AT[ethertype])
+        buf = ctypes.create_string_buffer(bpf)
+        s.setsockopt(
+            socket.SOL_SOCKET,
+            _SO_ATTACH_FILTER,
+            struct.pack("@HP", count, ctypes.addressof(buf)),
+        )
         if self._iface:
             s.bind((self._iface, ethertype))
         return s
