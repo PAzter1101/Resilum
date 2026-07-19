@@ -60,7 +60,6 @@ class IcmpCarrier(Carrier):
             prn=lambda p: on_raw(p),
             store=False,
             stop_filter=lambda _p: stop is not None and stop.is_set(),
-            timeout=1,
         )
 
 
