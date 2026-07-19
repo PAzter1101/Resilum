@@ -10,6 +10,7 @@ pytest.importorskip("RNS", reason="Reticulum (rns) not installed")
 
 import RNS
 
+from rns_tcp_bridge import announce_cap
 from rns_tcp_bridge.discovery_plugins import _transport
 
 
@@ -31,7 +32,8 @@ def test_register_sets_every_attr_add_interface_would_set():
     assert iface.OUT is True
     assert iface.mode == _transport.Interface.MODE_FULL
     assert iface.ifac_size == 16
-    assert iface.announce_cap == RNS.Reticulum.ANNOUNCE_CAP / 100.0
+    assert iface.announce_cap == announce_cap.CAP_IDLE  # adaptive control took over
+
     assert iface.announce_rate_target is None
     assert iface.announce_rate_grace is None
     assert iface.announce_rate_penalty is None
