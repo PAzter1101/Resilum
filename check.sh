@@ -115,6 +115,17 @@ else
     echo "    ⚠️  docker unavailable, skipping"
 fi
 
+echo "  → markdownlint (README, ARCHITECTURE, package docs)..."
+MD_FILES=(README.md ARCHITECTURE.md bridges/rns_tcp_bridge/README.md)
+if command -v markdownlint-cli2 &> /dev/null; then
+    markdownlint-cli2 "${MD_FILES[@]}"
+elif command -v docker &> /dev/null && docker info &> /dev/null; then
+    docker run --rm -v "$PWD:/work" -w /work \
+        davidanson/markdownlint-cli2:v0.23.1 "${MD_FILES[@]}"
+else
+    echo "    ⚠️  markdownlint and docker both unavailable, skipping"
+fi
+
 echo ""
 echo "🧪 Step 4: Unit Tests"
 echo "---------------------"
