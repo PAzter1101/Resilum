@@ -16,7 +16,7 @@ class ClientEngine:
         session_id,
         on_output=None,
         min_poll=0.2,
-        max_poll=4.0,
+        max_poll=30.0,
     ):
         self._carrier = carrier
         self._server = server_identity
@@ -34,6 +34,7 @@ class ClientEngine:
 
     def write(self, data: bytes) -> None:
         self._send.write(data)
+        self._had_traffic = True  # uplink from RNS keeps the link "active"
 
     def on_received(self, raw, now: float) -> None:
         wire = self._carrier.parse_response(raw)

@@ -36,7 +36,9 @@ def test_downlink_reaches_client_via_broadcast():
     link = _Link()
     got = []
     cc, sc = FakeClientCarrier(link), FakeServerCarrier(link)
-    client = ClientEngine(cc, server_id, session_id=1, on_output=got.append)
+    client = ClientEngine(
+        cc, server_id, session_id=1, on_output=got.append, max_poll=4.0
+    )
     server = ServerEngine(sc, server_id)
     for i in range(3):
         now = float(i)
@@ -94,3 +96,21 @@ def test_two_clients_demuxed():
         _feed(cb, ccb, now)
     joined = b"".join(got)
     assert b"aaa" in joined and b"bbb" in joined
+
+
+def test_idle_link_backs_off_and_traffic_resets_poll():
+    server_id = RNS.Identity()
+    link = _Link()
+    cc, sc = FakeClientCarrier(link), FakeServerCarrier(link)
+    client = ClientEngine(cc, server_id, session_id=1, min_poll=0.2, max_poll=8.0)
+    server = ServerEngine(sc, server_id)
+    for i in range(20):  # establish, then poll idle with no traffic
+        now = float(i)
+        client.poll(now)
+        _feed(server, sc, now)
+        server.poll(now)
+        _feed(client, cc, now)
+    assert client._poll.interval() == 8.0  # dormant link backed off to max
+    client.write(b"x")  # uplink from RNS
+    client.poll(20.0)
+    assert client._poll.interval() == 0.2  # traffic snapped it back to min
