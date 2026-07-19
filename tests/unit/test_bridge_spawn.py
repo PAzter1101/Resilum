@@ -37,8 +37,14 @@ def test_spawn_covert_omits_unset_address_interface(monkeypatch):
     assert "--address" not in cmd
     assert "--interface" not in cmd
     assert "--mtu" not in cmd  # default MTU is not forwarded
+    assert "--bitrate" not in cmd  # default bitrate is not forwarded
 
 
 def test_spawn_covert_forwards_non_default_mtu(monkeypatch):
     cmd = _argv(monkeypatch, _Covert(carrier="icmp", mtu=1280, identity="/id"))
     assert cmd[cmd.index("--mtu") + 1] == "1280"
+
+
+def test_spawn_covert_forwards_non_default_bitrate(monkeypatch):
+    cmd = _argv(monkeypatch, _Covert(carrier="icmp", bitrate=9600, identity="/id"))
+    assert cmd[cmd.index("--bitrate") + 1] == "9600"

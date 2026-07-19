@@ -81,7 +81,7 @@ def test_v4_checksum_is_valid():
 
 def test_parse_rejects_non_icmp():
     c = IcmpCarrier(dst="203.0.113.9", ident=_ID)
-    pkt = _v4("1.2.3.4", "203.0.113.9", b"\x08" + b"\x00" * 7)
+    pkt = _v4("192.0.2.4", "203.0.113.9", b"\x08" + b"\x00" * 7)
     pkt = (ETH_P_IP, pkt[1][:9] + b"\x06" + pkt[1][10:])  # protocol 6 (TCP)
     assert c.parse_request(pkt) is None
 
@@ -89,13 +89,13 @@ def test_parse_rejects_non_icmp():
 def test_parse_rejects_non_echo():
     c = IcmpCarrier(dst="203.0.113.9", ident=_ID)
     icmp = struct.pack("!BBHHH", 3, 0, 0, _ID, 0)  # type 3, dest unreachable
-    assert c.parse_request(_v4("1.2.3.4", "203.0.113.9", icmp)) is None
+    assert c.parse_request(_v4("192.0.2.4", "203.0.113.9", icmp)) is None
 
 
 def test_parse_rejects_foreign_echo_id():
     _dst, icmp = IcmpCarrier(dst="203.0.113.9", ident=_ID ^ 1).build_request(None, b"x")
     c = IcmpCarrier(dst="203.0.113.9", ident=_ID)
-    assert c.parse_request(_v4("1.2.3.4", "203.0.113.9", icmp)) is None
+    assert c.parse_request(_v4("192.0.2.4", "203.0.113.9", icmp)) is None
 
 
 def test_capacity_positive():

@@ -128,6 +128,7 @@ def _parse_covert(doc: dict) -> list:
                         "addresses": _addresses_of(entry),
                         "interface": str(entry.get("interface") or ""),
                         "mtu": entry.get("mtu") or 1400,
+                        "bitrate": entry.get("bitrate") or 32000,
                         "identity": str(entry.get("identity") or ""),
                     }
                 )

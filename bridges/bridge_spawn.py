@@ -88,6 +88,8 @@ def _spawn_covert(spec: _Covert) -> subprocess.Popen:
         cmd += ["--interface", spec.interface]
     if spec.mtu != 1400:
         cmd += ["--mtu", str(spec.mtu)]
+    if spec.bitrate != 32000:
+        cmd += ["--bitrate", str(spec.bitrate)]
     log.info("spawning covert/%s", spec.carrier)
     return subprocess.Popen(cmd)
 

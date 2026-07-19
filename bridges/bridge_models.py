@@ -68,6 +68,8 @@ class _Covert(BaseModel):
     addresses: list[str] = Field(default_factory=list)
     interface: str = ""
     mtu: int = Field(default=1400, ge=68, le=65535)
+    # RNS timeout-patience / interface-priority hint, not a data-rate cap
+    bitrate: int = Field(default=32000, ge=1000, le=1_000_000_000)
     identity: str = ""
 
     @field_validator("addresses")

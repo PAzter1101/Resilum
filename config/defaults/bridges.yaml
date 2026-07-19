@@ -152,6 +152,10 @@ bridges:
 # ── mtu        (optional) assumed path MTU for sizing packets; default 1400.
 # ──            Lower it on paths that fragment, raise it where larger frames
 # ──            pass. Capacity is then MTU minus IP/ICMP headers (per family).
+# ── bitrate    (optional) how patient RNS is with this link; default 32000.
+# ──            NOT a speed cap (RNS paces data by RTT). A low value gives
+# ──            generous timeouts and deprioritises the covert link vs faster
+# ──            interfaces; lower it further (e.g. 9600) on very lossy paths.
 # ──
 # ── Reception is honest: the server only acts on packets that authenticate as
 # ── ours and drops the kernel's duplicate echo-reply for them (see nftguard),
@@ -162,4 +166,5 @@ covert:
     interface: ${RESILUM_COVERT_IFACE:-}
     addresses: ${RESILUM_COVERT_ADDR:-}
     mtu: ${RESILUM_COVERT_MTU:-1400}
+    bitrate: ${RESILUM_COVERT_BITRATE:-32000}
     identity: /config/covert/server.id
