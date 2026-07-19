@@ -49,7 +49,9 @@ def test_covert_entry_carries_fields():
             {
                 "carrier": "icmp",
                 "role": "server",
-                "address": "203.0.113.9",
+                "interface": "eth0",
+                "addresses": ["203.0.113.9", "2001:db8::9"],
+                "mtu": 1280,
                 "identity": "/id",
             }
         ]
@@ -57,8 +59,26 @@ def test_covert_entry_carries_fields():
     c = _parse_covert(doc)[0]
     assert c.carrier == "icmp"
     assert c.role == "server"
-    assert c.address == "203.0.113.9"
+    assert c.interface == "eth0"
+    assert c.addresses == ["203.0.113.9", "2001:db8::9"]
+    assert c.mtu == 1280
     assert c.identity == "/id"
+
+
+def test_covert_addresses_from_comma_string():
+    doc = {"covert": [{"carrier": "icmp", "addresses": "1.2.3.4, 5.6.7.8"}]}
+    assert _parse_covert(doc)[0].addresses == ["1.2.3.4", "5.6.7.8"]
+
+
+def test_covert_null_fields_become_empty():
+    doc = {
+        "covert": [{"carrier": "icmp", "role": None, "addresses": None, "mtu": None}]
+    }
+    c = _parse_covert(doc)[0]
+    assert c.role == "both"
+    assert c.addresses == []
+    assert c.interface == ""
+    assert c.mtu == 1400
 
 
 def test_covert_missing_carrier_aborts():

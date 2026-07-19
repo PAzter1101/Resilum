@@ -75,13 +75,19 @@ def _spawn_covert(spec: _Covert) -> subprocess.Popen:
         "-m",
         "covert.discovery",
         spec.carrier,
+        "--role",
+        spec.role,
         "--identity",
         spec.identity,
         "--config",
         RNS_CONFIG_DIR,
     ]
-    if spec.address and spec.role in ("server", "both"):
-        cmd += ["--address", spec.address]
+    for addr in spec.addresses:
+        cmd += ["--address", addr]
+    if spec.interface:
+        cmd += ["--interface", spec.interface]
+    if spec.mtu != 1400:
+        cmd += ["--mtu", str(spec.mtu)]
     log.info("spawning covert/%s", spec.carrier)
     return subprocess.Popen(cmd)
 

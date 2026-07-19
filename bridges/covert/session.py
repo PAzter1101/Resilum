@@ -15,16 +15,18 @@ class Session:
 
 
 class SessionTable:
-    def __init__(self, payload_size: int, window: int, ttl: float = 300.0):
-        self._size = payload_size
+    def __init__(self, size_for, window: int, ttl: float = 300.0):
+        self._size_for = size_for
         self._window = window
         self._ttl = ttl
         self._sessions: dict[int, Session] = {}
 
-    def get(self, session_id: int, now: float) -> Session:
+    def get(self, session_id: int, now: float, reply_to=None) -> Session:
         s = self._sessions.get(session_id)
         if s is None:
-            s = Session(SendBuffer(self._size, self._window), RecvBuffer())
+            s = Session(
+                SendBuffer(self._size_for(reply_to), self._window), RecvBuffer()
+            )
             self._sessions[session_id] = s
         s.last_seen = now
         return s

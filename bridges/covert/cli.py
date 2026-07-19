@@ -10,7 +10,9 @@ import time
 from rns_tcp_bridge.identity import load_or_create_identity
 
 from .carriers import load
+from .carriers.icmp import DEFAULT_MTU
 from .engine import ClientEngine, ServerEngine
+from .icmpid import tunnel_id
 from .pubkey import identity_from_hex
 
 POLL_TICK = 0.1
@@ -23,6 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--identity", default="")
     p.add_argument("--server-identity", dest="server_identity", default="")
     p.add_argument("--dst", default="")
+    p.add_argument("--interface", default="")
+    p.add_argument("--mtu", type=int, default=DEFAULT_MTU)
     return p
 
 
@@ -59,32 +63,39 @@ def _drive(carrier, engine, feed) -> None:
         engine.poll(now)
 
 
-def _run_client(carrier, args) -> None:
-    server = identity_from_hex(args.server_identity)
+def _run_client(carrier, server) -> None:
     session_id = int.from_bytes(os.urandom(4), "big")
     engine = ClientEngine(carrier, server, session_id, on_output=_emit)
     _drive(carrier, engine, engine.write)
 
 
-def _run_server(carrier, args) -> None:
-    engine = ServerEngine(
-        carrier,
-        load_or_create_identity(args.identity),
-        on_output=lambda peer, b: _emit(b),
-    )
+def _run_server(carrier, identity) -> None:
+    engine = ServerEngine(carrier, identity, on_output=lambda peer, b: _emit(b))
     _drive(carrier, engine, engine.broadcast)
+
+
+def _load_carrier(args, identity):
+    carrier = load(
+        args.carrier,
+        dst=args.dst,
+        iface=args.interface,
+        ident=tunnel_id(identity.get_public_key()),
+        mtu=args.mtu,
+    )
+    if carrier is None:
+        sys.exit(f"unknown carrier {args.carrier!r}")
+    return carrier
 
 
 def main(argv=None) -> None:
     args = build_parser().parse_args(argv)
-    carrier = load(args.carrier, dst=args.dst)
-    if carrier is None:
-        sys.exit(f"unknown carrier {args.carrier!r}")
     if args.role == "client":
         if not args.server_identity:
             sys.exit("client requires --server-identity")
-        _run_client(carrier, args)
+        server = identity_from_hex(args.server_identity)
+        _run_client(_load_carrier(args, server), server)
     else:
         if not args.identity:
             sys.exit("server requires --identity")
-        _run_server(carrier, args)
+        identity = load_or_create_identity(args.identity)
+        _run_server(_load_carrier(args, identity), identity)

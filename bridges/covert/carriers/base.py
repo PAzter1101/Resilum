@@ -15,6 +15,12 @@ class Carrier(ABC):
     @abstractmethod
     def capacity(self) -> int: ...
 
+    def capacity_for(self, dest) -> int:
+        """Capacity when addressing ``dest``. Carriers whose payload budget
+        varies by destination (e.g. IPv4 vs IPv6 headers) override this; the
+        default is destination-independent."""
+        return self.capacity
+
     @abstractmethod
     def build_request(self, reply_to, wire: bytes): ...
 

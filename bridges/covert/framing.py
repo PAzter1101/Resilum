@@ -33,6 +33,10 @@ class SendBuffer:
         self._rto = RTO_INITIAL
 
     @property
+    def payload_size(self) -> int:
+        return self._size
+
+    @property
     def rto(self) -> float:
         return self._rto
 

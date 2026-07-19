@@ -75,7 +75,7 @@ def test_two_clients_demuxed():
     server_id = RNS.Identity()
     la, lb = _Link(), _Link()
     got = []
-    table = SessionTable(payload_size=43, window=8)
+    table = SessionTable(lambda _reply_to: 43, window=8)
     cca, ccb = FakeClientCarrier(la, peer="A"), FakeClientCarrier(lb, peer="B")
     sca, scb = FakeServerCarrier(la), FakeServerCarrier(lb)
     ca = ClientEngine(cca, server_id, session_id=10)

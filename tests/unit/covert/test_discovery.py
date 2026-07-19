@@ -4,7 +4,11 @@ from types import SimpleNamespace
 import RNS
 
 from covert import discovery
-from covert.discovery import client_interface_config, server_interface_config
+from covert.discovery import (
+    _announce_addresses,
+    client_interface_config,
+    server_interface_config,
+)
 
 
 def test_client_config_embeds_pubkey_hex():
@@ -17,24 +21,37 @@ def test_client_config_embeds_pubkey_hex():
     )
 
 
-def test_server_config_carries_name_command_respawn():
-    cfg = server_interface_config("icmp", "/config/covert/server.id")
-    assert cfg["name"] == "CovertServer[icmp]"
+def test_client_config_appends_interface():
+    cfg = client_interface_config("icmp", "203.0.113.9", "deadbeef", "eth1")
+    assert cfg["command"].endswith("--interface eth1")
+
+
+def test_client_config_appends_non_default_mtu():
+    cfg = client_interface_config("icmp", "203.0.113.9", "deadbeef", "eth1", 1280)
+    assert cfg["command"].endswith("--interface eth1 --mtu 1280")
+
+
+def test_config_omits_default_mtu():
+    cfg = client_interface_config("icmp", "203.0.113.9", "deadbeef")
+    assert "--mtu" not in cfg["command"]
+
+
+def test_server_config_appends_interface():
+    cfg = server_interface_config("icmp", "/config/covert/server.id", "eth0")
     assert cfg["command"] == (
-        f"{sys.executable} -m covert icmp server --identity /config/covert/server.id"
+        f"{sys.executable} -m covert icmp server "
+        "--identity /config/covert/server.id --interface eth0"
     )
-    assert cfg["respawn_delay"] == 5
+    assert cfg["name"] == "CovertServer[icmp]"
 
 
-def test_register_peer_registers_client_with_pubkey_hex(monkeypatch):
+def test_register_peer_uses_first_announced_address(monkeypatch):
     captured = []
     monkeypatch.setattr(RNS.Transport, "interfaces", [])
     monkeypatch.setattr(discovery, "PipeInterface", lambda owner, cfg: cfg)
     monkeypatch.setattr(discovery, "register_in_transport", captured.append)
-    server = RNS.Identity()
-    discovery._register_peer("icmp", "1.2.3.4", server)
-    assert len(captured) == 1
-    assert server.get_public_key().hex() in captured[0]["command"]
+    discovery._register_peer("icmp", "1.2.3.4,2001:db8::9", RNS.Identity())
+    assert captured[0]["name"] == "CovertDiscovered[icmp:1.2.3.4]"
 
 
 def test_register_peer_dedups_existing_interface(monkeypatch):
@@ -45,3 +62,21 @@ def test_register_peer_dedups_existing_interface(monkeypatch):
     monkeypatch.setattr(discovery, "register_in_transport", captured.append)
     discovery._register_peer("icmp", "1.2.3.4", RNS.Identity())
     assert captured == []
+
+
+def test_announce_addresses_prefers_explicit():
+    assert _announce_addresses(True, ["203.0.113.9"], "") == ["203.0.113.9"]
+
+
+def test_announce_addresses_empty_for_client_role():
+    assert _announce_addresses(False, ["203.0.113.9"], "") == []
+
+
+def test_announce_addresses_autodetects_public(monkeypatch):
+    monkeypatch.setattr(discovery, "detect_address", lambda iface: "198.51.100.7")
+    assert _announce_addresses(True, [], "") == ["198.51.100.7"]
+
+
+def test_announce_addresses_empty_when_autodetect_private(monkeypatch):
+    monkeypatch.setattr(discovery, "detect_address", lambda iface: "")
+    assert _announce_addresses(True, [], "") == []

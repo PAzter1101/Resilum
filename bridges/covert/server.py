@@ -2,7 +2,6 @@
 
 from . import keyx
 from .datagram import (
-    DEFAULT_TAG_LEN,
     HEADER_LEN,
     Datagram,
     Kind,
@@ -19,9 +18,12 @@ class ServerEngine:
         self._carrier = carrier
         self._identity = own_identity
         self._on_output = on_output or (lambda peer, b: None)
-        self._tag = carrier.tag_len if carrier is not None else DEFAULT_TAG_LEN
-        cap = carrier.capacity - overhead(self._tag) if carrier is not None else 1200
-        self.table = table or SessionTable(payload_size=cap, window=8)
+        self._tag = carrier.tag_len
+        self.table = table or SessionTable(self._payload_size, window=8)
+
+    def _payload_size(self, reply_to) -> int:
+        capacity: int = self._carrier.capacity_for(reply_to)
+        return capacity - overhead(self._tag)
 
     def broadcast(self, data: bytes) -> None:
         for s in self.table.established():
@@ -42,7 +44,7 @@ class ServerEngine:
         if kind == Kind.HANDSHAKE:
             self._open(session_id, wire[HEADER_LEN:], reply_to, now)
             return
-        s = self.table.get(session_id, now)
+        s = self.table.get(session_id, now, reply_to)
         if s.key is None:
             return
         dg = unpack(wire, s.key, self._tag)
@@ -60,7 +62,7 @@ class ServerEngine:
         key = keyx.unseal(self._identity, token)
         if key is None:
             return
-        s = self.table.get(session_id, now)
+        s = self.table.get(session_id, now, reply_to)
         s.key = key
         s.reply_to = reply_to
         self._respond(s, session_id, now)

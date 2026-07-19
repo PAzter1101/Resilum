@@ -49,7 +49,9 @@ class _Vpn:
 class _Covert:
     carrier: str
     role: str = "both"
-    address: str = ""
+    addresses: list[str] = field(default_factory=list)
+    interface: str = ""
+    mtu: int = 1400
     identity: str = ""
 
 
@@ -111,6 +113,17 @@ def _parse_vpn(doc: dict) -> list:
     return out
 
 
+def _addresses_of(entry: dict) -> list[str]:
+    """Accept a YAML list, a single scalar, or a comma-separated string (the
+    shape ``${RESILUM_COVERT_ADDR}`` expands to). Empty/unset yields []."""
+    raw = entry.get("addresses", entry.get("address"))
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(a).strip() for a in raw if str(a).strip()]
+    return [a.strip() for a in str(raw).split(",") if a.strip()]
+
+
 def _parse_covert(doc: dict) -> list:
     out = []
     for i, entry in enumerate(doc.get("covert", [])):
@@ -120,9 +133,11 @@ def _parse_covert(doc: dict) -> list:
         out.append(
             _Covert(
                 carrier=str(carrier),
-                role=str(entry.get("role", "both")),
-                address=str(entry.get("address", "")),
-                identity=str(entry.get("identity", "")),
+                role=str(entry.get("role") or "both"),
+                addresses=_addresses_of(entry),
+                interface=str(entry.get("interface") or ""),
+                mtu=int(entry.get("mtu") or 1400),
+                identity=str(entry.get("identity") or ""),
             )
         )
     return out

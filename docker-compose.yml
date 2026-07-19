@@ -1,3 +1,4 @@
+---
 # Resilum container — single Compose file with two mutually-exclusive
 # profiles: `headless` (no LoRa hardware) and `lora` (with a LoRa radio
 # attached over USB). See README → Quick start.
@@ -65,11 +66,21 @@ x-resilum-base: &resilum-base
     # via shell env or .env file when 10808 conflicts with other
     # SOCKS proxies (Xray's default is also 10808).
     RESILUM_SOCKS_PORT: "${RESILUM_SOCKS_PORT:-10808}"
+    # Covert-transport server endpoint(s): the IP(s) peers ping to reach this
+    # node's covert carrier (see the `covert:` block in bridges.yaml). Any
+    # address peers can reach — a public IP, or a private one on a shared LAN;
+    # comma-separate several. Unset = auto-detect a public IP, else client-only.
+    RESILUM_COVERT_ADDR: "${RESILUM_COVERT_ADDR:-}"
+    # Covert carrier NIC. Unset = auto-detect the default-route interface.
+    RESILUM_COVERT_IFACE: "${RESILUM_COVERT_IFACE:-}"
+    # Covert path-MTU override for packet sizing. Default 1400.
+    RESILUM_COVERT_MTU: "${RESILUM_COVERT_MTU:-1400}"
     # Public listener bind addresses. Unset = the dual-stack default in the
     # seed configs (accepts IPv4 + IPv6). Set explicit comma-separated
     # addresses to bind specific IPs/ports (IPv6 in [brackets]); a malformed
     # value stops the container on purpose.
-    #   RESILUM_YGG_PUBLIC_LISTEN: "tcp://203.0.113.10:65533,tcp://[2001:db8::1]:65533"
+    #   RESILUM_YGG_PUBLIC_LISTEN:
+    #     "tcp://203.0.113.10:65533,tcp://[2001:db8::1]:65533"
     #   RESILUM_RNS_LISTEN: "203.0.113.10:4242,[2001:db8::1]:4242"
 
 services:
