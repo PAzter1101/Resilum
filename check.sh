@@ -91,7 +91,32 @@ shellcheck docker/*.sh check.sh
 echo "✓ shellcheck passed"
 
 echo ""
-echo "🧪 Step 3: Unit Tests"
+echo "🐳 Step 3: Container & Config Lint"
+echo "----------------------------------"
+# shellcheck source=/dev/null
+source .venv-check/bin/activate
+echo "  → yamllint (compose + config)..."
+yamllint docker-compose.yml config/defaults/
+deactivate
+
+echo "  → hadolint (Dockerfile)..."
+if command -v hadolint &> /dev/null; then
+    hadolint docker/Dockerfile
+elif command -v docker &> /dev/null && docker info &> /dev/null; then
+    docker run --rm -i hadolint/hadolint:v2.14.0 hadolint - < docker/Dockerfile
+else
+    echo "    ⚠️  hadolint and docker both unavailable, skipping"
+fi
+
+echo "  → docker compose config (validate)..."
+if command -v docker &> /dev/null && docker info &> /dev/null; then
+    docker compose config -q && echo "    ✓ compose valid"
+else
+    echo "    ⚠️  docker unavailable, skipping"
+fi
+
+echo ""
+echo "🧪 Step 4: Unit Tests"
 echo "---------------------"
 # shellcheck source=/dev/null
 source .venv-check/bin/activate
@@ -99,7 +124,7 @@ pytest tests/unit -v
 deactivate
 
 echo ""
-echo "💨 Step 4: Smoke Tests"
+echo "💨 Step 5: Smoke Tests"
 echo "----------------------"
 # shellcheck source=/dev/null
 source .venv-check/bin/activate
@@ -108,7 +133,7 @@ deactivate
 
 if [ "$RUN_DOCKER" = true ]; then
     echo ""
-    echo "🏗️  Step 5: Docker Build (profile=$DOCKER_PROFILE)"
+    echo "🏗️  Step 6: Docker Build (profile=$DOCKER_PROFILE)"
     echo "----------------------------------------------"
     if command -v docker &> /dev/null && docker info &> /dev/null; then
         # `buildx --load` materialises the image in the local Docker

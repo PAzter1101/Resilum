@@ -51,6 +51,21 @@ jobs:
       with:
         scandir: ./docker
 
+  container-config-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Lint Dockerfile (hadolint)
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: docker/Dockerfile
+    - name: Lint YAML (yamllint)
+      run: |
+        pip install yamllint==1.38.0
+        yamllint docker-compose.yml config/defaults/
+    - name: Validate Compose
+      run: docker compose -f docker-compose.yml config -q
+
   docker-build-check:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
