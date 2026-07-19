@@ -1,59 +1,81 @@
-"""Build and parse ICMP/ICMPv6 echo packets carrying a wire datagram in the
-echo data field. Each packet is tagged with the link's echo id (derived from
-the server identity, see covert.icmpid) so the kernel's own echo-reply can be
-dropped for ours alone (see covert.nftguard) while ordinary pings keep
-working."""
+"""Build and parse ICMP/ICMPv6 echo messages carrying the wire datagram in the
+echo data field, using only the standard library. Building emits the ICMP
+message alone — the kernel adds the IP header on send (and the ICMPv6 checksum).
+Parsing takes the L3 IP packet captured via AF_PACKET, tagged with its
+ethertype."""
 
 import ipaddress
+import socket
+import struct
 
-from scapy.layers.inet import ICMP, IP
-from scapy.layers.inet6 import ICMPv6EchoReply, ICMPv6EchoRequest, IPv6
-from scapy.packet import Packet, Raw
+_REQUEST_V4, _REPLY_V4 = 8, 0
+_REQUEST_V6, _REPLY_V6 = 128, 129
+_PROTO_ICMP, _PROTO_ICMPV6 = 1, 58
+ETH_P_IP, ETH_P_IPV6 = 0x0800, 0x86DD
+_ECHO = struct.Struct("!BBHHH")  # type, code, checksum, id, seq
 
-_ECHO_REQUEST = 8
-_ECHO_REPLY = 0
 
-
-def _is_v6(addr: str) -> bool:
+def is_v6(addr: str) -> bool:
     return ipaddress.ip_address(addr).version == 6
 
 
-def build_request(dst: str, wire: bytes, ident: int):
-    if _is_v6(dst):
-        return IPv6(dst=dst) / ICMPv6EchoRequest(id=ident, data=wire)
-    return IP(dst=dst) / ICMP(type=_ECHO_REQUEST, id=ident) / Raw(wire)
+def _checksum(data: bytes) -> int:
+    if len(data) % 2:
+        data += b"\x00"
+    total: int = sum(struct.unpack("!%dH" % (len(data) // 2), data))
+    total = (total >> 16) + (total & 0xFFFF)
+    total += total >> 16
+    return (~total) & 0xFFFF
 
 
-def build_response(dst: str, wire: bytes, ident: int):
-    if _is_v6(dst):
-        return IPv6(dst=dst) / ICMPv6EchoReply(id=ident, data=wire)
-    return IP(dst=dst) / ICMP(type=_ECHO_REPLY, id=ident) / Raw(wire)
+def _echo(icmp_type: int, ident: int, payload: bytes, v6: bool) -> bytes:
+    body = _ECHO.pack(icmp_type, 0, 0, ident, 0) + payload
+    if v6:  # the kernel fills the ICMPv6 checksum on send
+        return body
+    return body[:2] + struct.pack("!H", _checksum(body)) + body[4:]
+
+
+def build_request(dst: str, payload: bytes, ident: int):
+    v6 = is_v6(dst)
+    return (dst, _echo(_REQUEST_V6 if v6 else _REQUEST_V4, ident, payload, v6))
+
+
+def build_response(dst: str, payload: bytes, ident: int):
+    v6 = is_v6(dst)
+    return (dst, _echo(_REPLY_V6 if v6 else _REPLY_V4, ident, payload, v6))
 
 
 def parse_request(raw, ident: int):
-    return _extract(raw, _ECHO_REQUEST, ICMPv6EchoRequest, ident)
+    return _extract(raw, _REQUEST_V4, _REQUEST_V6, ident)
 
 
 def parse_response(raw, ident: int):
-    got = _extract(raw, _ECHO_REPLY, ICMPv6EchoReply, ident)
+    got = _extract(raw, _REPLY_V4, _REPLY_V6, ident)
     return None if got is None else got[1]
 
 
-def _reparse(raw) -> Packet:
-    if isinstance(raw, Packet):
-        return raw
-    data = bytes(raw)
-    return IPv6(data) if data and (data[0] >> 4) == 6 else IP(data)
+def _echo_payload(icmp: bytes, want_type: int, ident: int):
+    if len(icmp) < _ECHO.size:
+        return None
+    itype, _code, _ck, iid, _seq = _ECHO.unpack(icmp[: _ECHO.size])
+    if itype != want_type or iid != ident:
+        return None
+    return icmp[_ECHO.size :]
 
 
-def _extract(raw, v4_type: int, v6_cls, ident: int):
-    pkt = _reparse(raw)
-    if IP in pkt and ICMP in pkt and Raw in pkt:
-        icmp = pkt[ICMP]
-        if icmp.type == v4_type and icmp.id == ident:
-            return (pkt[IP].src, bytes(pkt[Raw].load))
-    if IPv6 in pkt and v6_cls in pkt:
-        echo = pkt[v6_cls]
-        if echo.id == ident:
-            return (pkt[IPv6].src, bytes(echo.data))
-    return None
+def _extract(raw, v4_type: int, v6_type: int, ident: int):
+    proto, pkt = raw
+    if proto == ETH_P_IP:
+        if len(pkt) < 20 or pkt[9] != _PROTO_ICMP:
+            return None
+        ihl = (pkt[0] & 0x0F) * 4
+        payload = _echo_payload(pkt[ihl:], v4_type, ident)
+        src = socket.inet_ntop(socket.AF_INET, pkt[12:16])
+    elif proto == ETH_P_IPV6:
+        if len(pkt) < 40 or pkt[6] != _PROTO_ICMPV6:
+            return None
+        payload = _echo_payload(pkt[40:], v6_type, ident)
+        src = socket.inet_ntop(socket.AF_INET6, pkt[8:24])
+    else:
+        return None
+    return None if payload is None else (src, payload)

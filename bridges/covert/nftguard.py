@@ -4,8 +4,8 @@ crafted reply — doubling an already narrow channel. The rule matches this
 server's echo id (see covert.icmpid), so every other ping is still answered
 normally.
 
-libpcap taps the wire before netfilter, so scapy still captures the dropped
-requests."""
+AF_PACKET taps below netfilter, so the covert server still captures the
+dropped requests."""
 
 import atexit
 import subprocess

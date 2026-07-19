@@ -66,7 +66,7 @@ RUN --mount=type=bind,source=docker/apt-snapshot.sources,target=/etc/apt/sources
         microsocks=1.0.5-1 \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── covert ─── Tor + obfs4, iodine (DNS tunnel), scapy ICMP/email transports.
+# ─── covert ─── Tor + obfs4, iodine (DNS tunnel), ICMP + email transports.
 FROM profile-mesh AS profile-covert
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -76,7 +76,6 @@ RUN --mount=type=bind,source=docker/apt-snapshot.sources,target=/etc/apt/sources
         tor=0.4.9.11-0+deb13u1 \
         obfs4proxy=0.0.14-2+b5 \
         iodine=0.7.0-11 \
-        tcpdump=4.99.5-2 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN --mount=from=ghcr.io/astral-sh/uv:0.9.5,source=/uv,target=/usr/local/bin/uv \
@@ -128,7 +127,7 @@ COPY scripts /opt/resilum/scripts
 #   yggdrasil / iodine — CAP_NET_ADMIN for their TUN devices
 #   nft                — CAP_NET_ADMIN; file caps don't propagate from the python
 #                        that spawns it, so grant on the binary itself
-#   python3            — CAP_NET_RAW for the scapy ICMP transport
+#   python3            — CAP_NET_RAW for the raw-socket ICMP transport
 RUN ln -snf /config/reticulum /home/resilum/.reticulum && \
     if command -v yggdrasil >/dev/null 2>&1; then \
         setcap cap_net_admin+ep "$(command -v yggdrasil)"; fi && \

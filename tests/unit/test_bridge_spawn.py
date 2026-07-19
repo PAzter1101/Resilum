@@ -17,7 +17,7 @@ def test_spawn_covert_forwards_role_addresses_interface(monkeypatch):
     cmd = _argv(
         monkeypatch,
         _Covert(
-            "icmp",
+            carrier="icmp",
             role="server",
             addresses=["1.2.3.4", "2001:db8::9"],
             interface="eth0",
@@ -32,7 +32,7 @@ def test_spawn_covert_forwards_role_addresses_interface(monkeypatch):
 
 
 def test_spawn_covert_omits_unset_address_interface(monkeypatch):
-    cmd = _argv(monkeypatch, _Covert("icmp", role="client", identity="/id"))
+    cmd = _argv(monkeypatch, _Covert(carrier="icmp", role="client", identity="/id"))
     assert "--role" in cmd
     assert "--address" not in cmd
     assert "--interface" not in cmd
@@ -40,5 +40,5 @@ def test_spawn_covert_omits_unset_address_interface(monkeypatch):
 
 
 def test_spawn_covert_forwards_non_default_mtu(monkeypatch):
-    cmd = _argv(monkeypatch, _Covert("icmp", mtu=1280, identity="/id"))
+    cmd = _argv(monkeypatch, _Covert(carrier="icmp", mtu=1280, identity="/id"))
     assert cmd[cmd.index("--mtu") + 1] == "1280"

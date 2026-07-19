@@ -50,7 +50,7 @@ def test_unknown_mode_aborts(tmp_path):
             tcp: 127.0.0.1:1
     """,
     )
-    with pytest.raises(SystemExit, match="must be 'listen' or 'connect'"):
+    with pytest.raises(SystemExit, match="'listen' or 'connect'"):
         load(path)
 
 
