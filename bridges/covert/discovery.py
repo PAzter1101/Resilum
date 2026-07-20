@@ -66,9 +66,18 @@ class _Handler:
         ).start()
 
     def _resolve(self, announced_identity):
+        peer = RNS.prettyhexrep(announced_identity.hash)
         addr_csv = rendezvous.request_endpoint(announced_identity, self._carrier)
         if not addr_csv:
+            RNS.log(
+                f"[covert:{self._carrier}] rendezvous with {peer} yielded no address",
+                RNS.LOG_WARNING,
+            )
             return
+        RNS.log(
+            f"[covert:{self._carrier}] discovered {peer} at {addr_csv}, linking up",
+            RNS.LOG_INFO,
+        )
         _register_peer(
             self._carrier,
             addr_csv,
