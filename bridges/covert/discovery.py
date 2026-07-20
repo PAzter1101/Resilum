@@ -13,7 +13,7 @@ from rns_tcp_bridge.identity import load_or_create_identity
 
 from . import nftguard, rendezvous
 from .carriers.icmp import DEFAULT_MTU
-from .endpoint import pack_endpoint, parse_endpoint
+from .endpoint import pack_endpoint
 from .icmpid import tunnel_id
 from .interfaces import (
     DEFAULT_BITRATE,
@@ -56,11 +56,7 @@ class _Handler:
         self._lock = threading.Lock()
 
     def received_announce(self, destination_hash, announced_identity, app_data):
-        parsed = announce_payload.parse(app_data)
-        if parsed is None or parsed.endpoint is None or announced_identity is None:
-            return
-        ep = parse_endpoint(parsed.endpoint)
-        if ep is None or ep[0] != self._carrier:
+        if announce_payload.parse(app_data) is None or announced_identity is None:
             return
         with self._lock:
             if announced_identity.hash in self._handled:
@@ -128,7 +124,7 @@ def run(
         response_generator=rendezvous.endpoint_responder(endpoint),
         allow=RNS.Destination.ALLOW_ALL,
     )
-    capability = announce_payload.pack(pack_endpoint(carrier, ""))
+    capability = announce_payload.pack()
     trigger = announce_trigger.register()
     while True:
         dest.announce(app_data=capability)
