@@ -20,8 +20,8 @@ that fits in a TCP socket goes through.
 ## Two run modes
 
 | Mode | Side | What it does |
-|---|---|---|
-| `listen`  | anchor | Binds an RNS destination, accepts incoming Links, forwards each Link bidirectionally to a fixed local TCP endpoint |
+| --- | --- | --- |
+| `listen` | anchor | Binds an RNS destination, accepts incoming Links, forwards each Link bidirectionally to a fixed local TCP endpoint |
 | `connect` | client | Listens on a local TCP port; for each TCP connection opens an RNS Link to a known anchor identity and pumps bytes both ways |
 
 Both sides participate in regular Reticulum routing — the Link rides
@@ -116,14 +116,14 @@ default, 7 = extreme). Bridge events use the standard `[bridge:listen]`
 The bridge itself is dumb on purpose — failover happens on the layers
 *around* it, not inside it.
 
-* **Underlay failover is built into Reticulum.** A live RNS Link is not
+- **Underlay failover is built into Reticulum.** A live RNS Link is not
   tied to a specific interface. As long as there is at least one
   underlay reaching the peer (Yggdrasil, Tor, clearnet, LoRa, ICMP-pipe,
   ...), Transport keeps the Link alive across underlay changes. The
   application sees no break when, say, clearnet drops and the same Link
   starts riding LoRa instead.
 
-* **Application-level reconnect is owned by the higher protocol.** If
+- **Application-level reconnect is owned by the higher protocol.** If
   every underlay is gone long enough for the Link to die, the bridge
   closes the matching TCP socket. Yggdrasil, Tor, ssh, browsers and
   most modern protocols then reopen a new TCP to the bridge, the bridge

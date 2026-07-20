@@ -1,16 +1,15 @@
-"""Parse and model the supervisor's YAML config.
-
-Two component families are recognised: ``bridges:`` (rns_tcp_bridge
-listen|connect) and ``vpn:`` (bridges.vpn server|client). Adding a new
-family is one extra dataclass + parser here plus one ``_spawn_*`` in
-bridge_spawn."""
+"""Parse and validate the supervisor's YAML config into the bridge_models
+families. Adding a new family is one extra model in bridge_models plus a parser
+here and one ``_spawn_*`` in bridge_spawn."""
 
 import os
 import re
 import sys
-from dataclasses import dataclass, field
 
 import yaml
+from pydantic import ValidationError
+
+from bridge_models import _Bridge, _Covert, _Vpn
 
 # ${VAR} or ${VAR:-default}. Anything else passes through untouched.
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}")
@@ -24,27 +23,6 @@ def _expand_env(text: str) -> str:
     return _ENV_VAR_PATTERN.sub(sub, text)
 
 
-@dataclass
-class _Bridge:
-    mode: str
-    services: list[str]
-    identity: str
-    tcp: str
-    target: str | None = None
-    use_own: str = "smart"
-    allow_countries: list[str] = field(default_factory=list)
-    deny_countries: list[str] = field(default_factory=list)
-    probe_targets: list[str] = field(default_factory=list)
-    exit_country: str = "*"
-
-
-@dataclass
-class _Vpn:
-    mode: str
-    identity: str
-    extra_args: list[str]
-
-
 def _services_of(entry: dict) -> list[str]:
     """Accept either ``service: foo`` (single, legacy) or
     ``services: [a, b]`` (priority list, connect-mode fallback chain).
@@ -52,54 +30,111 @@ def _services_of(entry: dict) -> list[str]:
     if "services" in entry:
         services = entry["services"]
         if not isinstance(services, list) or not services:
-            raise SystemExit(
-                f"bridges entry {entry!r} has empty or non-list `services`"
-            )
+            sys.exit(f"bridges entry {entry!r} has empty or non-list `services`")
         return [str(s) for s in services]
     return [str(entry.get("service", "generic"))]
+
+
+def _addresses_of(entry: dict) -> list[str]:
+    """Accept a YAML list, a single scalar, or a comma-separated string (the
+    shape ``${RESILUM_COVERT_ADDR}`` expands to). Empty/unset yields []."""
+    raw = entry.get("addresses", entry.get("address"))
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(a).strip() for a in raw if str(a).strip()]
+    return [a.strip() for a in str(raw).split(",") if a.strip()]
+
+
+def _abort(ctx: str, exc: ValidationError):
+    err = exc.errors()[0]
+    loc = ".".join(str(x) for x in err["loc"]) or "?"
+    sys.exit(f"{ctx}: {loc}: {err['msg']}")
 
 
 def _parse_bridges(doc: dict) -> list:
     out = []
     for i, entry in enumerate(doc.get("bridges", [])):
-        mode = entry.get("mode")
-        if mode not in ("listen", "connect"):
-            sys.exit(f"bridges[{i}].mode must be 'listen' or 'connect', got {mode!r}")
+        ctx = f"bridges[{i}]"
         services = _services_of(entry)
-        if mode == "listen" and len(services) != 1:
+        if entry.get("mode") == "listen" and len(services) != 1:
             sys.exit(
-                f"bridges[{i}] is listen-mode but has {len(services)} services; "
+                f"{ctx} is listen-mode but has {len(services)} services; "
                 "listen-mode wraps exactly one service"
             )
-        out.append(
-            _Bridge(
-                mode=mode,
-                services=services,
-                identity=entry["identity"],
-                tcp=entry["tcp"],
-                target=entry.get("target"),
-                use_own=str(entry.get("use_own", "smart")),
-                allow_countries=[str(c) for c in entry.get("allow_countries", [])],
-                deny_countries=[str(c) for c in entry.get("deny_countries", [])],
-                probe_targets=[str(t) for t in entry.get("probe_targets", [])],
-                exit_country=str(entry.get("exit_country", "*")),
+        try:
+            out.append(
+                _Bridge.model_validate(
+                    {
+                        "mode": entry.get("mode"),
+                        "services": services,
+                        "identity": entry.get("identity"),
+                        "tcp": entry.get("tcp"),
+                        "target": entry.get("target"),
+                        "use_own": str(entry.get("use_own", "smart")),
+                        "allow_countries": [
+                            str(c) for c in entry.get("allow_countries", [])
+                        ],
+                        "deny_countries": [
+                            str(c) for c in entry.get("deny_countries", [])
+                        ],
+                        "probe_targets": [
+                            str(t) for t in entry.get("probe_targets", [])
+                        ],
+                        "exit_country": str(entry.get("exit_country", "*")),
+                    }
+                )
             )
-        )
+        except ValidationError as exc:
+            _abort(ctx, exc)
     return out
 
 
 def _parse_vpn(doc: dict) -> list:
     out = []
     for i, entry in enumerate(doc.get("vpn", [])):
-        mode = entry.get("mode")
-        if mode not in ("server", "client"):
-            sys.exit(f"vpn[{i}].mode must be 'server' or 'client', got {mode!r}")
-        extras: list[str] = []
-        for key in ("tun", "subnet", "uplink", "mtu", "target"):
-            value = entry.get(key)
-            if value is not None:
-                extras += [f"--{key}", str(value)]
-        out.append(_Vpn(mode=mode, identity=entry["identity"], extra_args=extras))
+        ctx = f"vpn[{i}]"
+        try:
+            out.append(
+                _Vpn.model_validate(
+                    {
+                        "mode": entry.get("mode"),
+                        "identity": entry.get("identity"),
+                        "tun": entry.get("tun"),
+                        "subnet": entry.get("subnet"),
+                        "uplink": entry.get("uplink"),
+                        "mtu": entry.get("mtu"),
+                        "target": entry.get("target"),
+                    }
+                )
+            )
+        except ValidationError as exc:
+            _abort(ctx, exc)
+    return out
+
+
+def _parse_covert(doc: dict) -> list:
+    out = []
+    for i, entry in enumerate(doc.get("covert", [])):
+        ctx = f"covert[{i}]"
+        if not entry.get("carrier"):
+            sys.exit(f"{ctx}: missing carrier")
+        try:
+            out.append(
+                _Covert.model_validate(
+                    {
+                        "carrier": str(entry["carrier"]),
+                        "role": str(entry.get("role") or "both"),
+                        "addresses": _addresses_of(entry),
+                        "interface": str(entry.get("interface") or ""),
+                        "mtu": entry.get("mtu") or 1400,
+                        "bitrate": entry.get("bitrate") or 32000,
+                        "identity": str(entry.get("identity") or ""),
+                    }
+                )
+            )
+        except ValidationError as exc:
+            _abort(ctx, exc)
     return out
 
 
@@ -107,7 +142,7 @@ def load(path: str) -> list:
     with open(path) as fh:
         raw = fh.read()
     doc = yaml.safe_load(_expand_env(raw)) or {}
-    return _parse_bridges(doc) + _parse_vpn(doc)
+    return _parse_bridges(doc) + _parse_vpn(doc) + _parse_covert(doc)
 
 
 def _siblings_for(spec: _Bridge, all_specs: list) -> list[str]:

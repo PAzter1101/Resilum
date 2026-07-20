@@ -1,3 +1,4 @@
+---
 # Default Resilum bridge configuration.
 #
 # Each entry becomes one long-running `rns_tcp_bridge` child process
@@ -66,12 +67,14 @@ bridges:
   # ── known: socks-egress (public-IP exit) → tor (via Tor exit nodes).
   - mode: connect
     services: [socks-egress, tor]
-    # Egress picking: fastest eligible provider by measured latency, with failover.
-    # use_own: smart (default) | true | false. smart = use own tor/i2p (fast, private)
-    #   but never your own socks-egress (would expose your real IP).
+    # Egress picking: fastest eligible provider by measured latency,
+    # with failover. use_own: smart (default) | true | false —
+    # smart = use own tor/i2p (fast, private) but never your own
+    # socks-egress (would expose your real IP).
     use_own: smart
-    # Exit-country policy (ISO codes). Empty = unrestricted. A provider whose exit
-    # country is unknown ("*", e.g. unpinned Tor) is excluded when either list is set.
+    # Exit-country policy (ISO codes). Empty = unrestricted. A provider
+    # whose exit country is unknown ("*", e.g. unpinned Tor) is excluded
+    # when either list is set.
     allow_countries: []
     deny_countries: []
     # Latency-probe targets (IPv4:port) reached through each egress to measure
@@ -92,8 +95,8 @@ bridges:
   #   service: socks-egress
   #   identity: /config/bridges/socks-egress.id
   #   tcp: 127.0.0.1:${RESILUM_SOCKS_EGRESS_PORT:-1080}
-  #   # exit_country: DE   # ISO code of THIS node's public-IP country, announced to
-  #   #                    # consumers for country filtering. Omit = "*" (unknown).
+  #   # exit_country: DE   # ISO code of THIS node's public-IP country,
+  #   #   announced to consumers for country filtering. Omit "*" (unknown).
 
 # ── Layer-3 VPN over Reticulum ────────────────────────────────────────
 # A VPN tunnel routes any IP traffic (TCP, UDP, ICMP, QUIC, …) through
@@ -132,3 +135,36 @@ bridges:
 #     # No `target` here — the client discovers anchors automatically
 #     # by listening for RNS announces on `resilum.vpn.gateway`.
 #     mtu: 1280
+
+# ── Covert transports: carry RNS over ICMP where that gets through a filtered
+# ── network. Discovery announces this node's endpoint(s) and dials discovered
+# ── peers back automatically. This is a list — add one entry per (role,
+# ── interface) binding, e.g. a server on one NIC and a client on another.
+# ──
+# ── role       both | server | client. server: accept covert links and
+# ──            announce; client: dial discovered peers; both.
+# ── interface  (optional) NIC to sniff/reply on (server) or send from (client).
+# ──            Omit to auto-detect the default-route interface.
+# ── addresses  (optional, server) list of IPs peers ping to reach you — any
+# ──            they can reach, public or private. Omit to auto-detect the
+# ──            interface's IP, but only a *public* IP announces automatically;
+# ──            behind NAT set it explicitly (RESILUM_COVERT_ADDR, comma list).
+# ── mtu        (optional) assumed path MTU for sizing packets; default 1400.
+# ──            Lower it on paths that fragment, raise it where larger frames
+# ──            pass. Capacity is then MTU minus IP/ICMP headers (per family).
+# ── bitrate    (optional) how patient RNS is with this link; default 32000.
+# ──            NOT a speed cap (RNS paces data by RTT). A low value gives
+# ──            generous timeouts and deprioritises the covert link vs faster
+# ──            interfaces; lower it further (e.g. 9600) on very lossy paths.
+# ──
+# ── Reception is honest: the server only acts on packets that authenticate as
+# ── ours and drops the kernel's duplicate echo-reply for them (see nftguard),
+# ── so ordinary pings are unaffected. Needs the `covert` build profile.
+covert:
+  - carrier: icmp
+    role: both
+    interface: ${RESILUM_COVERT_IFACE:-}
+    addresses: ${RESILUM_COVERT_ADDR:-}
+    mtu: ${RESILUM_COVERT_MTU:-1400}
+    bitrate: ${RESILUM_COVERT_BITRATE:-32000}
+    identity: /config/covert/server.id
