@@ -1,21 +1,24 @@
 Resilum — multi-transport mesh node
 Copyright 2026 PAzter1101 and contributors
 
-This product includes software developed under the Apache License,
-Version 2.0 (see LICENSE).
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
-When invoked, the Resilum container additionally launches and
-distributes binaries from the following projects, each under its own
-upstream license:
+The Resilum container bundles third-party software, each under its own
+upstream license.
 
-  * Reticulum Network Stack          MIT
-  * rns-covert-transport (TechVoid)  Apache-2.0
-  * rns-over-icmp (matvik22000)      (no declared license — used as-is)
-  * iodine                           ISC
-  * i2pd                             BSD-3-Clause
-  * Tor + obfs4proxy                 BSD
-  * yggdrasil-go                     LGPL-3.0
-  * Meshtastic Python                Apache-2.0 / GPL-3.0
+Python libraries, imported at runtime and linked into the process:
 
-Each component is invoked as a separate process, not statically
-linked, so the bundle as a whole is distributed as a mere aggregation.
+  * Reticulum (rns)                    MIT
+  * LXMF                               MIT
+  * PyYAML                             MIT
+  * PySocks                            BSD
+  * rns-covert-transport (TechVoid)    Apache-2.0
+  * Meshtastic Python (full profile)   GPL-3.0
+
+Binaries, invoked as separate processes (mere aggregation, not linked):
+
+  * iodine                             ISC
+  * i2pd                               BSD-3-Clause
+  * Tor + obfs4proxy                   BSD
+  * yggdrasil-go                       LGPL-3.0
+  * microsocks                         MIT

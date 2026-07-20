@@ -14,6 +14,7 @@ SOCKS5 proxy with rdns=True.
 import re
 
 import RNS
+
 from socks_tcp_interface import SocksTCPClientInterface
 
 from ._transport import register_in_transport

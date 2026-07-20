@@ -1,81 +1,87 @@
-"""Connect mode: listen on a local TCP port and tunnel each accepted
-connection through an RNS Link to a known anchor identity.
+"""Connect mode: listen on a local TCP port and forward each accepted
+connection through the fastest eligible egress candidate, chosen per
+connection by the registry+selector and kept sticky for the lifetime
+of that connection.
 
-Supports a priority list of services so a single TCP endpoint can
-fall through transports — e.g. try ``socks-egress`` first (direct
-public-IP exit), fall back to ``tor`` (Tor SOCKS via mesh) if the
-direct egress is unreachable. Both the discovery half (announce
-handlers) and the dispatch half (per-connection target picker) honour
-the order in which services were given on the command line."""
+The listener always binds immediately; when no candidate is known yet
+the connection is dropped with a warning instead of blocking startup."""
 
 import socket
-import sys
 import threading
 
 import RNS
 
 from ..constants import DEFAULT_ASPECTS
 from ..identity import load_or_create_identity
-from .announce import _build_skip_hashes, _make_announce_handler
-from .dispatch import _handle_outbound, _wait_for_any_target
+from . import monitor
+from .announce import _build_skip_hashes, _make_registry_handler
+from .candidates import CandidateRegistry
+from .dispatch import dispatch_to
+from .eligibility import eligible
+from .probe import resolve_targets
+from .selector import choose_best
 
-TARGET_DISCOVERY_TIMEOUT = 90
+
+def _serve(sock, candidate):
+    if not dispatch_to(sock, candidate):
+        sock.close()
 
 
 def run(args):
     load_or_create_identity(args.identity)
     services = list(args.service) if args.service else ["generic"]
+    use_own = getattr(args, "use_own", "smart")
+    allow = list(getattr(args, "allow_country", []) or [])
+    deny = list(getattr(args, "deny_country", []) or [])
 
-    targets: dict = {}
-    lock = threading.Lock()
+    registry = CandidateRegistry()
 
     if args.target:
-        # Legacy single-target mode: --target overrides discovery for
-        # the first listed service.
-        targets[services[0]] = bytes.fromhex(args.target)
+        # Explicit --target: dial a fixed hash directly, bypassing discovery.
+        registry.upsert(services[0], bytes.fromhex(args.target))
+        skip_hashes: dict[str, set] = {s: set() for s in services}
     else:
-        skips = _build_skip_hashes(getattr(args, "skip_self_identity", []), services)
+        skip_hashes = _build_skip_hashes(
+            getattr(args, "skip_self_identity", []), services
+        )
         for service in services:
-            handler = _make_announce_handler(
-                service,
-                DEFAULT_ASPECTS + [service],
-                skips[service],
-                targets,
-                lock,
+            handler = _make_registry_handler(
+                service, DEFAULT_ASPECTS + [service], skip_hashes[service], registry
             )
             RNS.Transport.register_announce_handler(handler)
-        RNS.log(
-            f"[bridge:connect] services in priority order: "
-            f"{services}; waiting up to {TARGET_DISCOVERY_TIMEOUT}s for "
-            "the first announce on any of them",
-            RNS.LOG_INFO,
-        )
-        if not _wait_for_any_target(targets, lock, services, TARGET_DISCOVERY_TIMEOUT):
-            sys.exit(
-                f"no announce on any of {services} within "
-                f"{TARGET_DISCOVERY_TIMEOUT}s; cannot start without target"
-            )
+
+    def eligible_now():
+        return eligible(registry.all(), use_own, allow, deny, skip_hashes)
+
+    probe_targets = resolve_targets(getattr(args, "probe_target", None))
+
+    threading.Thread(
+        target=monitor.run,
+        args=(registry, lambda _all: eligible_now(), probe_targets),
+        daemon=True,
+        name="egress-monitor",
+    ).start()
 
     tcp_host, tcp_port = args.tcp.rsplit(":", 1)
-    tcp_port = int(tcp_port)
-
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind((tcp_host, tcp_port))
+    listener.bind((tcp_host, int(tcp_port)))
     listener.listen(8)
-    with lock:
-        snapshot = {s: targets.get(s) for s in services}
     RNS.log(
-        f"[bridge:connect] listening on {tcp_host}:{tcp_port}, "
-        f"fallback chain: {snapshot}",
+        f"[bridge:connect] listening on {tcp_host}:{tcp_port}, services={services}",
         RNS.LOG_INFO,
     )
 
+    current = None
     while True:
         sock, addr = listener.accept()
         RNS.log(f"[bridge:connect] TCP connection from {addr}", RNS.LOG_INFO)
-        threading.Thread(
-            target=_handle_outbound,
-            args=(sock, services, targets, lock),
-            daemon=True,
-        ).start()
+        current = choose_best(eligible_now(), current)
+        if current is None:
+            RNS.log(
+                "[bridge:connect] no eligible egress; dropping connection",
+                RNS.LOG_WARNING,
+            )
+            sock.close()
+            continue
+        threading.Thread(target=_serve, args=(sock, current), daemon=True).start()

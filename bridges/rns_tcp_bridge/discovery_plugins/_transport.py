@@ -21,6 +21,8 @@ keep that path working with newer Reticulum, plugins now go through
 import RNS
 from RNS.Interfaces.Interface import Interface
 
+from rns_tcp_bridge.announce_cap import adaptive_cap
+
 
 def register_in_transport(iface) -> None:
     iface.mode = Interface.MODE_FULL
@@ -34,3 +36,4 @@ def register_in_transport(iface) -> None:
     iface.ifac_netname = None
     iface.ifac_netkey = None
     RNS.Transport.interfaces.append(iface)
+    adaptive_cap(iface)

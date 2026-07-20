@@ -77,6 +77,44 @@ def _build_parser():
             "as its target. May be repeated."
         ),
     )
+    p_connect.add_argument(
+        "--use-own",
+        choices=["smart", "true", "false"],
+        default="smart",
+        dest="use_own",
+        help="use own interfaces: smart (default), true, or false",
+    )
+    p_connect.add_argument(
+        "--allow-country",
+        action="append",
+        default=[],
+        dest="allow_country",
+        metavar="CC",
+        help="ISO country code to allow as exit (repeatable)",
+    )
+    p_connect.add_argument(
+        "--deny-country",
+        action="append",
+        default=[],
+        dest="deny_country",
+        metavar="CC",
+        help="ISO country code to deny as exit (repeatable)",
+    )
+    p_connect.add_argument(
+        "--probe-target",
+        action="append",
+        default=[],
+        dest="probe_target",
+        metavar="IPv4:PORT",
+        help="egress latency-probe target (repeatable); overrides "
+        "RESILUM_EGRESS_PROBE_TARGETS and the built-in defaults",
+    )
+    p_listen.add_argument(
+        "--exit-country",
+        default="*",
+        dest="exit_country",
+        help="ISO country this node's egress exits from (default '*': unknown)",
+    )
     return parser
 
 

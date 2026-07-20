@@ -9,6 +9,8 @@ venv/
 .eggs/
 build/
 dist/
+.mypy_cache/
+.pytest_cache/
 
 # Docker
 .docker-cache/

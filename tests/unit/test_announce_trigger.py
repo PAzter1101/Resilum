@@ -9,12 +9,12 @@ import pytest
 
 pytest.importorskip("RNS", reason="Reticulum (rns) not installed")
 
+import RNS
+
 from rns_tcp_bridge import announce_trigger as module
 
 
 def test_interface_names_extracts_names_from_transport():
-    import RNS
-
     fake = [SimpleNamespace(name="Yggdrasil"), SimpleNamespace(name="Tor")]
     saved = getattr(RNS.Transport, "interfaces", None)
     RNS.Transport.interfaces = fake

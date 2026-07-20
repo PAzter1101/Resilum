@@ -17,6 +17,8 @@ import time
 import RNS
 from RNS.Buffer import RawChannelReader
 
+from rns_tcp_bridge.identity import load_or_create_identity
+
 from . import framing, pump, tun
 from .discovery import GatewayDiscovery
 from .server import VPN_ASPECTS
@@ -85,8 +87,6 @@ def _resolve_target(args) -> bytes | None:
 
 
 def run(args) -> None:
-    from rns_tcp_bridge.identity import load_or_create_identity
-
     load_or_create_identity(args.identity)
 
     target_hash = _resolve_target(args)

@@ -30,13 +30,8 @@ jobs:
     - name: Check code formatting with Black
       run: black --check --diff bridges/ scripts/ tests/
 
-    - name: Check import sorting with isort
-      run: isort --check-only --diff bridges/ scripts/ tests/
-
-    - name: Lint with flake8
-      run: |
-        flake8 bridges/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 bridges/ scripts/ --count --max-complexity=10 --max-line-length=88 --statistics
+    - name: Lint with Ruff
+      run: ruff check bridges/ scripts/ tests/
 
     - name: Type check with mypy
       run: mypy --ignore-missing-imports bridges/ scripts/
@@ -55,6 +50,25 @@ jobs:
       uses: ludeeus/action-shellcheck@master
       with:
         scandir: ./docker
+
+  container-config-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Lint Dockerfile (hadolint)
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: docker/Dockerfile
+    - name: Lint YAML (yamllint)
+      run: |
+        pip install yamllint==1.38.0
+        yamllint docker-compose.yml config/defaults/
+    - name: Validate Compose
+      run: docker compose -f docker-compose.yml config -q
+    - name: Lint Markdown (markdownlint)
+      run: >
+        npx --yes markdownlint-cli2@0.23.1
+        README.md ARCHITECTURE.md bridges/rns_tcp_bridge/README.md
 
   docker-build-check:
     runs-on: ubuntu-latest

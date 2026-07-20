@@ -2,11 +2,14 @@
 endpoint bytes, malformed inputs return None, and the version field
 is checked against the local node's compatibility window."""
 
+import json
+
 import pytest
 
 pytest.importorskip("RNS", reason="Reticulum (rns) not installed")
 
 from rns_tcp_bridge import announce_payload as module
+from rns_tcp_bridge.version import VERSION
 
 
 def test_pack_then_parse_round_trip_with_endpoint():
@@ -65,3 +68,27 @@ def test_parse_compatible_different_minor_accepted(monkeypatch):
     assert parsed is not None
     assert parsed.version == "0.6.0"
     assert parsed.endpoint == b"abc.onion:4242"
+
+
+def test_pack_parse_roundtrips_country_and_caps():
+    raw = module.pack(exit_country="DE", capabilities=("dyn-exit",))
+    parsed = module.parse(raw)
+    assert parsed is not None
+    assert parsed.exit_country == "DE"
+    assert parsed.capabilities == ("dyn-exit",)
+
+
+def test_pack_omits_default_country_and_empty_caps():
+    raw = module.pack()
+    decoded = json.loads(raw.decode())
+    assert "co" not in decoded
+    assert "cap" not in decoded
+
+
+def test_parse_legacy_payload_defaults_country_star_no_caps():
+    # a payload from an older node has no "co"/"cap"
+    raw = json.dumps({"v": VERSION}).encode()
+    parsed = module.parse(raw)
+    assert parsed is not None
+    assert parsed.exit_country == "*"
+    assert parsed.capabilities == ()

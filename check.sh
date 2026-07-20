@@ -69,16 +69,9 @@ if ! black --check "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
     echo "  → Fixing code formatting (black)..."
     black "${SOURCE_DIRS[@]}"
 fi
-if ! isort --check-only "${SOURCE_DIRS[@]}" > /dev/null 2>&1; then
-    echo "  → Fixing import sorting (isort)..."
-    isort "${SOURCE_DIRS[@]}"
-fi
 
-echo "  → flake8 critical errors (E9,F63,F7,F82)..."
-flake8 "${LINT_DIRS[@]}" --count --select=E9,F63,F7,F82 --show-source --statistics
-
-echo "  → flake8 style..."
-flake8 "${LINT_DIRS[@]}" --count --max-complexity=10 --max-line-length=88 --statistics
+echo "  → ruff (lint, import order, in-function imports; autofixes what it can)..."
+ruff check --fix "${SOURCE_DIRS[@]}"
 
 echo "  → mypy..."
 mypy --ignore-missing-imports "${LINT_DIRS[@]}"
@@ -98,7 +91,43 @@ shellcheck docker/*.sh check.sh
 echo "✓ shellcheck passed"
 
 echo ""
-echo "🧪 Step 3: Unit Tests"
+echo "🐳 Step 3: Container & Config Lint"
+echo "----------------------------------"
+# shellcheck source=/dev/null
+source .venv-check/bin/activate
+echo "  → yamllint (compose + config)..."
+yamllint docker-compose.yml config/defaults/
+deactivate
+
+echo "  → hadolint (Dockerfile)..."
+if command -v hadolint &> /dev/null; then
+    hadolint docker/Dockerfile
+elif command -v docker &> /dev/null && docker info &> /dev/null; then
+    docker run --rm -i hadolint/hadolint:v2.14.0 hadolint - < docker/Dockerfile
+else
+    echo "    ⚠️  hadolint and docker both unavailable, skipping"
+fi
+
+echo "  → docker compose config (validate)..."
+if command -v docker &> /dev/null && docker info &> /dev/null; then
+    docker compose config -q && echo "    ✓ compose valid"
+else
+    echo "    ⚠️  docker unavailable, skipping"
+fi
+
+echo "  → markdownlint (README, ARCHITECTURE, package docs)..."
+MD_FILES=(README.md ARCHITECTURE.md bridges/rns_tcp_bridge/README.md)
+if command -v markdownlint-cli2 &> /dev/null; then
+    markdownlint-cli2 "${MD_FILES[@]}"
+elif command -v docker &> /dev/null && docker info &> /dev/null; then
+    docker run --rm -v "$PWD:/work" -w /work \
+        davidanson/markdownlint-cli2:v0.23.1 "${MD_FILES[@]}"
+else
+    echo "    ⚠️  markdownlint and docker both unavailable, skipping"
+fi
+
+echo ""
+echo "🧪 Step 4: Unit Tests"
 echo "---------------------"
 # shellcheck source=/dev/null
 source .venv-check/bin/activate
@@ -106,7 +135,7 @@ pytest tests/unit -v
 deactivate
 
 echo ""
-echo "💨 Step 4: Smoke Tests"
+echo "💨 Step 5: Smoke Tests"
 echo "----------------------"
 # shellcheck source=/dev/null
 source .venv-check/bin/activate
@@ -115,7 +144,7 @@ deactivate
 
 if [ "$RUN_DOCKER" = true ]; then
     echo ""
-    echo "🏗️  Step 5: Docker Build (profile=$DOCKER_PROFILE)"
+    echo "🏗️  Step 6: Docker Build (profile=$DOCKER_PROFILE)"
     echo "----------------------------------------------"
     if command -v docker &> /dev/null && docker info &> /dev/null; then
         # `buildx --load` materialises the image in the local Docker

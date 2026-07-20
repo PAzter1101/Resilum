@@ -1,15 +1,10 @@
-"""Unit tests for the bridge-supervisor YAML loader.
-
-Validates the configuration format without actually spawning any
-processes. Touches no network, no Reticulum stack, no disk besides
-the temporary file pytest creates.
-"""
+"""Bridge-supervisor YAML loading and validation (no processes spawned)."""
 
 import textwrap
 
 import pytest
 
-from supervisor import load
+from bridge_config import load
 
 
 def write(tmp_path, text):
@@ -55,13 +50,11 @@ def test_unknown_mode_aborts(tmp_path):
             tcp: 127.0.0.1:1
     """,
     )
-    with pytest.raises(SystemExit, match="must be 'listen' or 'connect'"):
+    with pytest.raises(SystemExit, match="'listen' or 'connect'"):
         load(path)
 
 
 def test_connect_without_target_is_allowed(tmp_path):
-    """Connect-mode without `target` is valid — bridge will
-    auto-discover one by listening for announces."""
     path = write(
         tmp_path,
         """
