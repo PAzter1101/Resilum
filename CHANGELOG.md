@@ -1,3 +1,44 @@
+# [0.5.0](https://github.com/PAzter1101/Resilum/compare/v0.4.0...v0.5.0) (2026-07-20)
+
+
+### Bug Fixes
+
+* **covert:** drop the redundant endpoint from the capability announce ([f1aa7b7](https://github.com/PAzter1101/Resilum/commit/f1aa7b7ba0d060795f6d188fa67764d48934a59e))
+* **covert:** give the rendezvous response handler an RNS-dispatchable signature ([04c344e](https://github.com/PAzter1101/Resilum/commit/04c344edccdb34dda475868aa237a8a225834584))
+* **covert:** re-announce on interface changes so distant peers discover the server ([804fd37](https://github.com/PAzter1101/Resilum/commit/804fd3721218f7cd9f115220c4ccb51ba6543a8a))
+* **covert:** sniff continuously instead of a single 1s capture ([1db6912](https://github.com/PAzter1101/Resilum/commit/1db69126433342ca5016b37c40579a3b37dba86b))
+
+
+### Features
+
+* **covert:** adaptive announce cap on discovered interfaces ([dd15aca](https://github.com/PAzter1101/Resilum/commit/dd15acaea27e16ff77bc20739f98bb53c5eeaff8))
+* **covert:** multi-address/interface discovery, IPv6, honest reception ([fa74223](https://github.com/PAzter1101/Resilum/commit/fa74223296ee40e7d9232899605af26395674ab2))
+* **covert:** rendezvous endpoint exchange, tunable bitrate, split discovery ([1ba0e61](https://github.com/PAzter1101/Resilum/commit/1ba0e614c6c83eeec481fa8e8262089510f4b1b9))
+* **covert:** reusable covert-transport framework with ICMP carrier ([02d4f48](https://github.com/PAzter1101/Resilum/commit/02d4f481ac8d44092a56f189a66744342c3adc73))
+* **egress:** route each connection through the fastest eligible egress ([249a1af](https://github.com/PAzter1101/Resilum/commit/249a1af25b6522d7c060dae49227a6eb8eeca359))
+
+
+### Performance Improvements
+
+* **covert:** back off polling while the link is idle ([39e7e43](https://github.com/PAzter1101/Resilum/commit/39e7e436c18136e0d2ac9da0ba0567d89746296e))
+* **covert:** kernel-filter the AF_PACKET capture to ICMP only ([52e3a8f](https://github.com/PAzter1101/Resilum/commit/52e3a8f8cb13fb759a467946d57fbcb482a88e82))
+
+## Docker Images
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) published to **GitHub Container Registry** and **Docker Hub**:
+
+| Profile | GHCR | Docker Hub |
+|---|---|---|
+| `full` *(default, `latest` alias)* | `ghcr.io/pazter1101/resilum:full-0.5.0` | `pazter1101/resilum:full-0.5.0` |
+| `covert` (Tor + obfs4 + email/ICMP/DNS) | `ghcr.io/pazter1101/resilum:covert-0.5.0` | `pazter1101/resilum:covert-0.5.0` |
+| `mesh` (Yggdrasil + I2P) | `ghcr.io/pazter1101/resilum:mesh-0.5.0` | `pazter1101/resilum:mesh-0.5.0` |
+| `lora` (Reticulum + LoRa only) | `ghcr.io/pazter1101/resilum:lora-0.5.0` | `pazter1101/resilum:lora-0.5.0` |
+
+### Usage
+```bash
+docker compose --profile headless up
+```
+
 # [0.4.0](https://github.com/PAzter1101/Resilum/compare/v0.3.2...v0.4.0) (2026-07-16)
 
 
