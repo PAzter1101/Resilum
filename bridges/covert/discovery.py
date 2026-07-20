@@ -4,11 +4,10 @@ announce, bring up a client PipeInterface sealed to the peer's identity."""
 import argparse
 import sys
 import threading
-import time
 
 import RNS
 
-from rns_tcp_bridge import announce_payload
+from rns_tcp_bridge import announce_payload, announce_trigger
 from rns_tcp_bridge.constants import ANNOUNCE_INTERVAL_SECONDS
 from rns_tcp_bridge.identity import load_or_create_identity
 
@@ -130,9 +129,11 @@ def run(
         allow=RNS.Destination.ALLOW_ALL,
     )
     capability = announce_payload.pack(pack_endpoint(carrier, ""))
+    trigger = announce_trigger.register()
     while True:
         dest.announce(app_data=capability)
-        time.sleep(ANNOUNCE_INTERVAL_SECONDS)
+        if trigger.wait(ANNOUNCE_INTERVAL_SECONDS):
+            trigger.clear()
 
 
 def main(argv=None) -> None:
